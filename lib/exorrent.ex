@@ -1,5 +1,6 @@
 defmodule Exorrent do
-  alias BencodeDecoder.Decoder
+  alias Exorrent.Decoder
+  alias Exorrent.Tracker
 
   def read_torrent(torrent) do
     with {:ok, bencode} <- File.read(torrent),
@@ -9,11 +10,8 @@ defmodule Exorrent do
   end
 
   def exorrent() do
-    {:ok, torrent} = read_torrent("puppy.torrent")
+    {:ok, torrent} = read_torrent("test.torrent")
 
-    Tracker.create_tracker(torrent)
+    Tracker.get_peers(torrent)
   end
-
-  # private functions
-
 end

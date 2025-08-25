@@ -1,4 +1,4 @@
-defmodule BencodeDecoder.Decoder do
+defmodule Exorrent.Decoder do
   @moduledoc """
   Documentation for `Decoder`.
   """
