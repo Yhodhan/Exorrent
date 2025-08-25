@@ -15,11 +15,15 @@ defmodule Exorrent.Tracker do
     # create the asynchronous tracker
     {:ok, _pid} = start_link(%{socket: socket, ip_address: ip_address, url: url})
 
-    msg = build_connection_req()
+    msg = connection_req()
 
     udp_message(msg)
 
     udp_response()
+  end
+
+  def announce(torrent, conn_id) do
+    _msg = announce_req(conn_id, torrent)
   end
 
   # -------------------
@@ -136,10 +140,17 @@ defmodule Exorrent.Tracker do
     end
   end
 
-  defp build_connection_req() do
+  defp connection_req() do
     protocol_id = 0x41727101980
     tx_id = :crypto.strong_rand_bytes(4)
 
     <<protocol_id::64, 0::32, tx_id::binary>>
+  end
+
+  defp announce_req(connection_id, _torrent, _port \\ 6881) do
+    action = 1
+    tx_id = :crypto.strong_rand_bytes(4)
+
+    <<connection_id::64, action::32, tx_id::binary>>
   end
 end

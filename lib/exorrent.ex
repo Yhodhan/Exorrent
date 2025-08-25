@@ -12,6 +12,7 @@ defmodule Exorrent do
   def exorrent() do
     {:ok, torrent} = read_torrent("test.torrent")
 
-    Tracker.get_peers(torrent)
+    {:connection, tx_id, conn_id} = Tracker.get_peers(torrent)
+    Tracker.announce(tx_id, conn_id)
   end
 end
