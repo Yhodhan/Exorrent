@@ -12,8 +12,8 @@ defmodule Exorrent.Encoder do
   def encode_bencode(data) when is_list(data),
     do: encode_list(data)
 
-  def encode_bencode(data) when is_bitstring(data),
-    do: encode_string(data)
+  def encode_bencode(data) when is_binary(data),
+    do: encode_bin(data)
 
   def encode_bencode(data) when is_atom(data),
     do: encode_atom(data)
@@ -48,11 +48,11 @@ defmodule Exorrent.Encoder do
 
   def encode_atom(atom) do
     Atom.to_string(atom)
-    |> encode_string()
+    |> encode_bin()
   end
 
-  def encode_string(str) do
-    len = String.length(str)
+  def encode_bin(str) do
+    len = byte_size(str)
     <<Integer.to_string(len)::binary, ?:, str::binary>>
   end
 end
