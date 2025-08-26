@@ -3,27 +3,24 @@ defmodule Exorrent.Encoder do
   Documentation for `Encoder`.
   """
 
-  def encode_bencode(data) when is_map(data),
+  def encode(data) when is_map(data),
     do: encode_map(data)
 
-  def encode_bencode(data) when is_integer(data),
+  def encode(data) when is_integer(data),
     do: encode_integer(data)
 
-  def encode_bencode(data) when is_list(data),
+  def encode(data) when is_list(data),
     do: encode_list(data)
 
-  def encode_bencode(data) when is_binary(data),
+  def encode(data) when is_binary(data),
     do: encode_bin(data)
-
-  def encode_bencode(data) when is_atom(data),
-    do: encode_atom(data)
 
   def encode_map(map) do
     keys = Map.keys(map)
     values = Map.values(map)
 
-    encode_keys = Enum.map(keys, fn k -> encode_bencode(k) end)
-    encode_values = Enum.map(values, fn v -> encode_bencode(v) end)
+    encode_keys = Enum.map(keys, fn k -> encode(k) end)
+    encode_values = Enum.map(values, fn v -> encode(v) end)
 
     bin_data =
       Enum.zip(encode_keys, encode_values)
@@ -36,7 +33,7 @@ defmodule Exorrent.Encoder do
   def encode_list(list) do
     bin_data =
       list
-      |> Enum.map(fn elem -> encode_bencode(elem) end)
+      |> Enum.map(fn elem -> encode(elem) end)
       |> Enum.reduce(<<>>, fn e, acc -> acc <> e end)
 
     <<?l, bin_data::binary, ?e>>
@@ -44,11 +41,6 @@ defmodule Exorrent.Encoder do
 
   def encode_integer(int) do
     <<?i, Integer.to_string(int)::binary, ?e>>
-  end
-
-  def encode_atom(atom) do
-    Atom.to_string(atom)
-    |> encode_bin()
   end
 
   def encode_bin(str) do

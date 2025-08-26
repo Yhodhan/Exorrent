@@ -1,4 +1,5 @@
 defmodule Exorrent.Tracker do
+  alias Exorrent.Encoder
   use GenServer
 
   def get_peers(torrent) do
@@ -147,10 +148,27 @@ defmodule Exorrent.Tracker do
     <<protocol_id::64, 0::32, tx_id::binary>>
   end
 
-  defp announce_req(connection_id, _torrent, _port \\ 6881) do
+  defp announce_req(connection_id, torrent, port \\ 6881) do
     action = 1
     tx_id = :crypto.strong_rand_bytes(4)
+    info_hash = get_info_hash(torrent["info"])
+    downloaded = 0
+    peer_id = :crypto.strong_rand_bytes(20)
+    left = 0
+    uploaded = 0
+    event = 0
+    ip_address = 0
+    key = :crypto.strong_rand_bytes(4)
+    num_want = -1
 
-    <<connection_id::64, action::32, tx_id::binary>>
+    <<connection_id::64, action::32, tx_id::binary, info_hash::binary, peer_id::binary, left::64,
+      downloaded::64, uploaded::64, event::32, ip_address::32, key::binary, num_want::4,
+      port::16>>
+  end
+
+  defp get_info_hash(info) do
+    raw_data = Encoder.encode(info)
+    # swarm id
+    :crypto.hash(:sha, raw_data)
   end
 end
