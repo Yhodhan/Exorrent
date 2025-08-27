@@ -28,4 +28,16 @@ defmodule Exorrent.TorrentParser do
       [announce]
     end
   end
+
+  def size(torrent) do
+    info = torrent["info"]
+
+    if is_nil(info["files"]) do
+      info["length"]
+    else
+      info["files"]
+      |> Enum.map(fn f -> f["length"] end)
+      |> Enum.reduce(0, fn size, acc -> size + acc end)
+    end
+  end
 end
