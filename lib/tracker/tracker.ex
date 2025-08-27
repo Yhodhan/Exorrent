@@ -1,17 +1,17 @@
 defmodule Exorrent.Tracker do
   alias Exorrent.Encoder
+  alias Exorrent.TorrentParser
+
   use GenServer
 
   def get_peers(torrent) do
-    announce = torrent["announce"]
-    announce_list = torrent["announce-list"]
-
-    trackers = get_trackers_list(announce, announce_list)
+    trackers = TorrentParser.get_trackers_list(torrent)
     # get udp for now
     url = get_udp_tracker(trackers)
 
     # this forces ipv4
     {:ok, socket} = :gen_udp.open(0, [:binary, :inet, {:active, false}])
+
     {:ok, ip_address} = get_ip_from_host(url.host)
     # create the asynchronous tracker
     {:ok, _pid} = start_link(%{socket: socket, ip_address: ip_address, url: url})
@@ -94,14 +94,6 @@ defmodule Exorrent.Tracker do
   # Private functions
   # ------------------
 
-  defp get_trackers_list(announce, announce_list) do
-    unless is_nil(announce_list) do
-      List.flatten(announce_list)
-    else
-      [announce]
-    end
-  end
-
   defp get_udp_tracker(trackers) do
     Enum.map(trackers, fn t -> URI.parse(t) end)
     |> Enum.filter(fn uri -> uri.scheme == "udp" end)
@@ -133,12 +125,34 @@ defmodule Exorrent.Tracker do
 
   defp process_message(response) do
     case response do
+      # connection
       <<0::32, tx_id::32, conn_id::64>> ->
-        {:connection, tx_id, conn_id}
+        %{action: :connection, tx_id: tx_id, conn_id: conn_id}
+
+      # announce
+      <<1::32, tx_id::32, interval::32, leechers::32, seeders::32, peers::binary>> ->
+        peers_ips = parse_peers(peers)
+
+        %{
+          action: :announce,
+          tx_id: tx_id,
+          interval: interval,
+          leechers: leechers,
+          seeders: seeders,
+          peers: peers_ips
+        }
 
       _ ->
         :unknown_operation
     end
+  end
+
+  defp parse_peers(<<>>), do: []
+
+  defp parse_peers(<<a, b, c, d, port::16, rest::binary>>) do
+    ip = {a, b, c, d}
+    peer = {ip, port}
+    [peer] ++ parse_peers(rest)
   end
 
   defp connection_req() do
@@ -151,7 +165,7 @@ defmodule Exorrent.Tracker do
   defp announce_req(connection_id, torrent, port \\ 6881) do
     action = 1
     tx_id = :crypto.strong_rand_bytes(4)
-    info_hash = get_info_hash(torrent["info"])
+    info_hash = TorrentParser.get_info_hash(torrent["info"])
     downloaded = 0
     peer_id = :crypto.strong_rand_bytes(20)
     left = 0
@@ -164,11 +178,5 @@ defmodule Exorrent.Tracker do
     <<connection_id::64, action::32, tx_id::binary, info_hash::binary, peer_id::binary, left::64,
       downloaded::64, uploaded::64, event::32, ip_address::32, key::binary, num_want::4,
       port::16>>
-  end
-
-  defp get_info_hash(info) do
-    raw_data = Encoder.encode(info)
-    # swarm id
-    :crypto.hash(:sha, raw_data)
   end
 end
