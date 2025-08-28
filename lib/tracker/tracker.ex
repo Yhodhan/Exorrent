@@ -22,8 +22,12 @@ defmodule Exorrent.Tracker do
     udp_response()
   end
 
-  def announce(torrent, conn_id) do
-    _msg = announce_req(conn_id, torrent)
+  def announce(conn_id, torrent) do
+    msg = announce_req(conn_id, torrent)
+
+    udp_message(msg)
+
+    udp_response()
   end
 
   # -------------------
@@ -33,8 +37,8 @@ defmodule Exorrent.Tracker do
   def start_link(state \\ []),
     do: GenServer.start_link(__MODULE__, state, name: __MODULE__)
 
-  def udp_message(msg),
-    do: GenServer.cast(__MODULE__, {:send_udp, msg})
+  def udp_message(msg, port \\ 6969),
+    do: GenServer.cast(__MODULE__, {:send_udp, msg, port})
 
   def udp_response(),
     do: GenServer.call(__MODULE__, :udp_response)
@@ -45,6 +49,9 @@ defmodule Exorrent.Tracker do
   def health(),
     do: send(__MODULE__, :health)
 
+  def conn_down(),
+    do: send(__MODULE__, :death)
+
   # ----------------------
   #   GenServer functions
   # ----------------------
@@ -52,8 +59,8 @@ defmodule Exorrent.Tracker do
   def init(state),
     do: {:ok, state}
 
-  def handle_cast({:send_udp, msg}, state) do
-    send_udp_message(state.socket, state.ip_address, state.url.port, msg)
+  def handle_cast({:send_udp, msg, port}, state) do
+    send_udp_message(state.socket, state.ip_address, port, msg)
     {:noreply, state}
   end
 
@@ -115,7 +122,10 @@ defmodule Exorrent.Tracker do
   defp send_udp_message(socket, ip_address, port, message) do
     IO.puts("Sending message to #{inspect(ip_address)}:#{port}")
 
-    port = port || 6969
+    IO.inspect(socket, label: "socket")
+    IO.inspect(ip_address, label: "ip_address")
+    IO.inspect(port, label: "port")
+    IO.inspect(message, label: "msg")
 
     :gen_udp.send(socket, ip_address, port, message)
 
@@ -175,7 +185,7 @@ defmodule Exorrent.Tracker do
     num_want = -1
 
     <<connection_id::64, action::32, tx_id::binary, info_hash::binary, peer_id::binary, left::64,
-      downloaded::64, uploaded::64, event::32, ip_address::32, key::binary, num_want::4,
+      downloaded::64, uploaded::64, event::32, ip_address::32, key::binary, num_want::signed-32,
       port::16>>
   end
 end
