@@ -122,18 +122,13 @@ defmodule Exorrent.Tracker do
   defp send_udp_message(socket, ip_address, port, message) do
     IO.puts("Sending message to #{inspect(ip_address)}:#{port}")
 
-    IO.inspect(socket, label: "socket")
-    IO.inspect(ip_address, label: "ip_address")
-    IO.inspect(port, label: "port")
-    IO.inspect(message, label: "msg")
-
     :gen_udp.send(socket, ip_address, port, message)
 
     IO.puts("Message sent. waiting for response ..")
   end
 
-  defp process_message(response) do
-    case response do
+  defp process_message(msg) do
+    case msg do
       # connection
       <<0::32, tx_id::32, conn_id::64>> ->
         %{action: :connection, tx_id: tx_id, conn_id: conn_id}
