@@ -1,6 +1,7 @@
 defmodule Exorrent.PeerManager do
   alias Exorrent.PeerConnection
   use Supervisor
+  require Logger
 
   def start_link(peers) do
     Supervisor.start_link(__MODULE__, peers, name: __MODULE__)
@@ -15,7 +16,7 @@ defmodule Exorrent.PeerManager do
         Enum.map(peers, fn peer ->
           %{
             id: {:peer, peer},
-            start: {PeerConnection, :start_link, [%{peer: peer}]}
+            start: {PeerConnection, :start_link, [%{peer: peer}]},
           }
         end)
 
@@ -23,20 +24,25 @@ defmodule Exorrent.PeerManager do
   end
 
   def broadcast() do
-    Registry.dispatch(:peer_registry, :broadcast, fn entries ->
-      for {pid, _value} <- entries do
-        GenServer.cast(pid, :connect)
-      end
+    Logger.info("=== Init broadcast ===")
+
+    peers = Registry.select(:peer_registry, [{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
+
+    Enum.each(peers, fn {_key, pid} ->
+      GenServer.cast(pid, :connect)
     end)
+
+    Logger.info("=== Finish broadcast ===")
   end
 
   def check_peer_connection() do
     conns = []
 
-    Registry.dispatch(:peer_registry, :broadcast, fn entries ->
-      for {pid, _value} <- entries do
-        conns ++ GenServer.call(pid, :peer_status)
-      end
+    peers = Registry.select(:peer_registry, [{{:"$1", :"$2", :_}, [], [{{:"$1", :"$2"}}]}])
+
+    Enum.each(peers, fn {_key, pid} ->
+      conn_status = GenServer.call(pid, :peer_status)
+      conns ++ [conn_status]
     end)
 
     conns
@@ -47,6 +53,6 @@ defmodule Exorrent.PeerManager do
   end
 
   def kill() do
-    Supervisor.stop(__MODULE__,:normal)
+    Supervisor.stop(__MODULE__, :normal)
   end
 end

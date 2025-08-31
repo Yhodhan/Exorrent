@@ -70,7 +70,7 @@ defmodule Exorrent.Tracker do
 
   # check if response from the tracker was get
   def handle_call(:udp_response, _from, state) do
-    case :gen_udp.recv(state.socket, 0, 5000) do
+    case :gen_udp.recv(state.socket, 0, 15000) do
       {:ok, {_from_ip, _from_port, received_msg}} ->
         response = process_message(received_msg)
         {:reply, response, state}

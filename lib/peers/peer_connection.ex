@@ -1,5 +1,6 @@
 defmodule Exorrent.PeerConnection do
   use GenServer
+  require Logger
   # -------------------
   #   GenServer calls
   # -------------------
@@ -23,13 +24,18 @@ defmodule Exorrent.PeerConnection do
 
   def handle_cast(:connect, state) do
     {ip, port} = state.peer
-    IO.puts("Connection to peer: #{inspect(ip)}:#{inspect(port)}")
 
-    {:ok, socket} = :gen_tcp.connect(ip, port, [:binary, {:active, true}])
+    case :gen_tcp.connect(ip, port, [:binary, {:active, true}]) do
+      {:ok, socket} ->
+        Logger.debug("succesfull connection")
+        new_state = Map.put(state, :socket, socket)
+        {:noreply, new_state}
 
-    new_state = Map.put(state, :socket, socket)
-
-    {:noreply, new_state}
+      {:error, reason} ->
+        Logger.debug("Failed to connect #{inspect(ip)}:#{port} reason=#{inspect(reason)}")
+        #        Logger.flush()
+        {:noreply, state}
+    end
   end
 
   def handle_call(:peer_status, _from, state) do
