@@ -1,60 +1,60 @@
 defmodule Exorrent.PeerConnection do
+  alias Exorrent.Peer
+
   use GenServer
   require Logger
+
   # -------------------
   #   GenServer calls
   # -------------------
 
   # initial states:
-  #  peer: {ip, port}
-  def start_link(initial_state),
-    do: GenServer.start_link(__MODULE__, initial_state, name: via_tuple(initial_state))
+  #  %Peer{ip, port, status, socket}
+  def start_link(%Peer{} = peer),
+    do: GenServer.start_link(__MODULE__, peer)
 
-  def peer_connect(name),
-    do: GenServer.cast(name, :connect)
+  def peer_connect(pid),
+    do: GenServer.cast(pid, :connect)
 
-  def peer_health(name),
-    do: GenServer.call(name, :status)
+  def peer_health(pid),
+    do: GenServer.call(pid, :status)
 
   # ----------------------
   #   GenServer functions
   # ----------------------
-  def init(state),
-    do: {:ok, state}
+  def init(peer) do
+    Registry.register(:peer_registry, {:peer, peer.ip, peer.port}, peer)
+    {:ok, peer}
+  end
+
+  def handle_cast(:terminate, state),
+    do: {:stop, :normal, state}
 
   def handle_cast(:connect, state) do
-    {ip, port} = state.peer
+    %Peer{ip: ip, port: port} = state
 
-    case :gen_tcp.connect(ip, port, [:binary, {:active, true}]) do
+    case :gen_tcp.connect(ip, port, [:binary, {:active, false}]) do
       {:ok, socket} ->
-        Logger.debug("succesfull connection")
-        new_state = Map.put(state, :socket, socket)
-        {:noreply, new_state}
+        Logger.debug("=== Succesfull connection #{inspect(ip)}:#{port}")
+
+        {:noreply, update_state(state, :connected, socket)}
 
       {:error, reason} ->
-        Logger.debug("Failed to connect #{inspect(ip)}:#{port} reason=#{inspect(reason)}")
+        Logger.debug("=== Failed to connect #{inspect(ip)}:#{port} reason=#{inspect(reason)}")
         #        Logger.flush()
-        {:noreply, state}
+        {:noreply, update_state(state, :not_connected, nil)}
     end
   end
 
-  def handle_call(:peer_status, _from, state) do
-    socket = Map.get(state, :socket)
-
-    if is_nil(socket) do
-      {:reply, :not_connected, state}
-    else
-      {:reply, :connected, state}
-    end
-  end
-
-  def handle_call(:status, _from, state),
-    do: {:reply, :alive, state}
+  def handle_call(:peer_status, _from, state),
+    do: {:reply, state, state}
 
   # ---------------------
   #     Name helper
   # ---------------------
-  defp via_tuple(initial_value) do
-    {:via, Registry, {:peer_registry, initial_value}}
+
+  defp update_state(state, conn, socket) do
+    peer = state
+    %{peer | status: conn, socket: socket, pid: self()}
   end
 end

@@ -19,8 +19,20 @@ defmodule Exorrent do
     PeerManager.broadcast()
   end
 
-  def check_peers() do
-    PeerManager.check_peer_connection()
+  def check_peers_status() do
+    PeerManager.check_peers_connections()
+  end
+
+  def get_peers() do
+    PeerManager.get_peers()
+  end
+
+  def get_connected_peers() do
+    PeerManager.get_connected_peers()
+  end
+
+  def terminate_unconnected_peers() do
+    PeerManager.terminate_unconnected_peers()
   end
 
   def reconnect() do
