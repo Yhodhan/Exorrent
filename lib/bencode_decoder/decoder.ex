@@ -2,6 +2,10 @@ defmodule Exorrent.Decoder do
   @moduledoc """
   Documentation for `Decoder`.
   """
+  def decode(bencode) do
+    {:ok, data, _} = decode_bencode(bencode)
+    {:ok, data}
+  end
 
   def decode_bencode(bencode) when is_binary(bencode) do
     bencode

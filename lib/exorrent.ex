@@ -2,18 +2,39 @@ defmodule Exorrent do
   alias Exorrent.TorrentParser
   alias Exorrent.Tracker
   alias Exorrent.PeerManager
+  alias Exorrent.PeerConnection
 
   def connection() do
     {:ok, torrent} = TorrentParser.read_torrent("test.torrent")
 
-    conn = Tracker.get_peers(torrent)
-    response = Tracker.announce(conn.conn_id, torrent)
+    Tracker.get_peers(torrent)
+    # response = Tracker.announce(conn.conn_id, torrent)
 
     # init swarm of peers
+    # {:ok, _pid} = PeerManager.start_link(response.peers)
 
-    {:ok, _pid} = PeerManager.start_link(response.peers)
-    # PeerManager.broadcast()
+    # tracker is no longer needed
+    # Tracker.conn_down()
+
+    # response.peers
   end
+
+  def init_handshake(torrent) do
+    # just one peer for now
+    peers = get_connected_peers()
+
+    Enum.map(peers, fn peer ->
+      handshake_msg = PeerConnection.build_handshake(torrent)
+
+      PeerConnection.send_handshake(peer.pid, handshake_msg)
+
+      PeerConnection.tcp_response(peer.pid)
+    end)
+  end
+
+  # -------------------
+  #       helpers
+  # -------------------
 
   def broadcast() do
     PeerManager.broadcast()
@@ -36,8 +57,13 @@ defmodule Exorrent do
   end
 
   def reconnect() do
-    Tracker.conn_down()
     PeerManager.kill()
     connection()
+  end
+
+  # helper
+  def torrent() do
+    {:ok, torrent} = TorrentParser.read_torrent("test.torrent")
+    torrent
   end
 end
