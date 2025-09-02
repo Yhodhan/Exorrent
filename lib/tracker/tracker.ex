@@ -11,6 +11,7 @@ defmodule Exorrent.Tracker do
       uri = URI.parse(tr)
       send_request(uri, torrent)
     end)
+    |> Enum.uniq()
   end
 
   def send_request(%URI{scheme: "https"} = url, torrent),

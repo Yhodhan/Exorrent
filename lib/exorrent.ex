@@ -7,16 +7,12 @@ defmodule Exorrent do
   def connection() do
     {:ok, torrent} = TorrentParser.read_torrent("test.torrent")
 
-    Tracker.get_peers(torrent)
-    # response = Tracker.announce(conn.conn_id, torrent)
+    peers = Tracker.get_peers(torrent)
 
     # init swarm of peers
-    # {:ok, _pid} = PeerManager.start_link(response.peers)
+    {:ok, _pid} = PeerManager.start_link(peers)
 
-    # tracker is no longer needed
-    # Tracker.conn_down()
-
-    # response.peers
+    peers
   end
 
   def init_handshake(torrent) do
