@@ -24,7 +24,7 @@ defmodule Exorrent.PeerConnection do
   def send_handshake(pid, msg),
     do: GenServer.cast(pid, {:send_tcp, msg})
 
-  def complete_handshake(pid),
+  def handshake_response(pid),
     do: GenServer.call(pid, :handshake_response, 15000)
 
   def terminate_connection(pid),

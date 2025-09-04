@@ -39,7 +39,7 @@ defmodule Exorrent do
 
     PeerConnection.send_handshake(peer.pid, handshake)
 
-    PeerConnection.complete_handshake(peer.pid)
+    PeerConnection.handshake_response(peer.pid)
     # end)
   end
 
