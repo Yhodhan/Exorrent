@@ -66,7 +66,7 @@ defmodule Exorrent.PeerConnection do
   def handle_call(:tcp_response, _from, state) do
     Logger.debug("Reading data from socket: #{inspect(state.socket)}")
 
-    case :gen_tcp.recv(state.socket, 0) do
+    case :gen_tcp.recv(state.socket, 68) do
       {:ok, data} ->
         # parse_msg(data)
         {:reply, data, state}
@@ -98,13 +98,11 @@ defmodule Exorrent.PeerConnection do
 
   def build_handshake(torrent) do
     pstr = "BitTorrent protocol"
-    pstrlen = String.length(pstr)
+    pstrlen = byte_size(pstr)
     reserved = <<0::64>>
     info_hash = TorrentParser.get_info_hash(torrent)
+    peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
 
-    peer_id = "-EX0001-" <> Base.encode16(:crypto.strong_rand_bytes(12))
-    peer_id = binary_part(peer_id, 0, 20)
-
-    <<pstrlen::8, pstr::binary, reserved::binary, info_hash::binary, peer_id::binary>>
+    <<pstrlen::8, pstr::binary, reserved::binary, info_hash::binary-size(20), peer_id::binary>>
   end
 end

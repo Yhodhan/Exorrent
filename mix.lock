@@ -1,3 +1,0 @@
-%{
-  "bencoder": {:hex, :bencoder, "0.0.7", "3cba80308fce6ee7c7cdf3d0e36cd3b35ed48537cee29615c3dcbabc7cac67d3", [:mix], [], "hexpm", "1fd5478490f0ef03e5afee0c0392226efe07a76c9f537697176bc46bc46500b8"},
-}

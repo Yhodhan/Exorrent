@@ -1,5 +1,6 @@
 defmodule Tracker.UdpTracker do
   alias Exorrent.TorrentParser
+  alias Exorrent.Peer
 
   use GenServer
   require Logger
@@ -88,8 +89,8 @@ defmodule Tracker.UdpTracker do
     with :ok <- udp_response(pid),
          {:ok, connection} <- await_response(),
          :ok <- announce(pid, connection.conn_id, torrent),
-         {:ok, announce} <- await_response(),
-         do: announce.peers
+         {:ok, announce} <- await_response() do
+      announce.peers
     else
       _ ->
         conn_down(pid)
@@ -160,7 +161,7 @@ defmodule Tracker.UdpTracker do
 
       # announce
       <<1::32, tx_id::32, interval::32, leechers::32, seeders::32, peers::binary>> ->
-        peers_ips = parse_peers(peers)
+        peers_ips = Peer.parse_peers(peers)
 
         %{
           action: :announce,
@@ -174,13 +175,5 @@ defmodule Tracker.UdpTracker do
       _ ->
         :unknown_operation
     end
-  end
-
-  defp parse_peers(<<>>), do: []
-
-  defp parse_peers(<<a, b, c, d, port::16, rest::binary>>) do
-    ip = {a, b, c, d}
-    peer = {ip, port}
-    [peer] ++ parse_peers(rest)
   end
 end

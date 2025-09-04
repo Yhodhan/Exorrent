@@ -53,6 +53,11 @@ defmodule Tracker.HttpTracker do
     "#{uri.scheme}://#{uri.authority}#{uri.path}?#{query}"
   end
 
+  defp encode_peers(%{"peers" => peer}) when is_binary(peer) do
+    <<a, b, c, d, port::16>> = peer
+    [{{a, b, c, d}, port}]
+  end
+
   defp encode_peers(%{"peers" => peers}),
     do: Enum.map(peers, fn p -> encode_peer(p) end)
 
