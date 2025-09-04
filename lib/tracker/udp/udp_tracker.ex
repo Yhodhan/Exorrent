@@ -85,15 +85,15 @@ defmodule Tracker.UdpTracker do
     msg = udp_connection_req()
     udp_message(pid, msg)
 
-    udp_response(pid)
-
-    case await_response() do
-      :error ->
+    with :ok <- udp_response(pid),
+         {:ok, connection} <- await_response(),
+         :ok <- announce(pid, connection.conn_id, torrent),
+         {:ok, announce} <- await_response(),
+         do: announce.peers
+    else
+      _ ->
         conn_down(pid)
         []
-
-      {:ok, response} ->
-        announce(pid, response.conn_id, torrent)
     end
   end
 
@@ -102,15 +102,6 @@ defmodule Tracker.UdpTracker do
     udp_message(pid, msg)
 
     udp_response(pid)
-
-    case await_response() do
-      :error ->
-        conn_down(pid)
-        []
-
-      {:ok, announce} ->
-        announce.peers
-    end
   end
 
   defp await_response() do
