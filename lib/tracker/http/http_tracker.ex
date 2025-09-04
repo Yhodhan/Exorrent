@@ -1,5 +1,4 @@
 defmodule Tracker.HttpTracker do
-  alias Exorrent.TorrentParser
   alias Exorrent.Decoder
 
   require Logger
@@ -39,12 +38,12 @@ defmodule Tracker.HttpTracker do
 
   defp http_connection_req(torrent, uri, port \\ 6881) do
     params = %{
-      "info_hash" => TorrentParser.get_info_hash(torrent),
+      "info_hash" => torrent.info_hash,
       "peer_id" => :crypto.strong_rand_bytes(20),
       "port" => port,
       "uploaded" => 0,
       "downloaded" => 0,
-      "left" => TorrentParser.size(torrent),
+      "left" => torrent.size,
       "compact" => 1,
       "event" => "started"
     }

@@ -1,5 +1,4 @@
 defmodule Tracker.UdpTracker do
-  alias Exorrent.TorrentParser
   alias Exorrent.Peer
 
   use GenServer
@@ -138,10 +137,10 @@ defmodule Tracker.UdpTracker do
   defp udp_announce_req(connection_id, torrent, port \\ 6881) do
     action = 1
     tx_id = :crypto.strong_rand_bytes(4)
-    info_hash = TorrentParser.get_info_hash(torrent)
+    info_hash = torrent.info_hash
     downloaded = 0
     peer_id = :crypto.strong_rand_bytes(20)
-    left = TorrentParser.size(torrent)
+    left = torrent.size
     uploaded = 0
     event = 0
     ip_address = 0

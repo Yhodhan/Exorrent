@@ -1,12 +1,11 @@
 defmodule Exorrent.Tracker do
-  alias Exorrent.TorrentParser
   alias Tracker.HttpTracker
   alias Tracker.UdpTracker
 
   require Logger
 
   def get_peers(torrent) do
-    TorrentParser.get_trackers(torrent)
+    torrent.trackers
     |> Enum.flat_map(fn tr -> request(tr, torrent) end)
     |> Enum.uniq()
   end

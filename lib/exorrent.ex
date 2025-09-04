@@ -1,32 +1,45 @@
 defmodule Exorrent do
-  alias Exorrent.TorrentParser
+  alias Exorrent.Torrent
   alias Exorrent.Tracker
   alias Exorrent.PeerManager
   alias Exorrent.PeerConnection
 
+  require Logger
+
   @torrent "ubuntu.torrent"
 
-  def connection() do
-    {:ok, torrent} = TorrentParser.read_torrent(@torrent)
+  def init() do
+    {:ok, torrent} = Torrent.read_torrent(@torrent)
 
     peers = Tracker.get_peers(torrent)
     # init swarm of peers
     PeerManager.start_link(peers)
 
-    broadcast()
+    Logger.info("=== Peers found init connection")
+    connection(torrent)
   end
 
-  def init_handshake() do
-    torr = torrent()
-    # just one peer for now
+  def connection(torrent) do
+    broadcast()
+
     [peer | _] = get_connected_peers()
 
+    Logger.info("=== Init of handhshake")
+    {:ok, info_hash} = init_handshake(torrent, peer)
+
+    if info_hash != torrent.info_hash do
+      Logger.info("=== Received answer does not match info hash")
+      PeerConnection.terminate_connection(peer.pid)
+    end
+  end
+
+  def init_handshake(torrent, peer) do
     # Enum.map(peers, fn peer ->
-    handshake = PeerConnection.build_handshake(torr)
+    handshake = PeerConnection.build_handshake(torrent)
 
     PeerConnection.send_handshake(peer.pid, handshake)
 
-    PeerConnection.tcp_response(peer.pid)
+    PeerConnection.complete_handshake(peer.pid)
     # end)
   end
 
@@ -56,12 +69,12 @@ defmodule Exorrent do
 
   def reconnect() do
     PeerManager.kill()
-    connection()
+    init()
   end
 
   # helper
   def torrent() do
-    {:ok, torrent} = TorrentParser.read_torrent(@torrent)
+    {:ok, torrent} = Torrent.read_torrent(@torrent)
     torrent
   end
 end

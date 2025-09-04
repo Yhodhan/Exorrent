@@ -1,9 +1,10 @@
 defmodule Exorrent.PeerConnection do
   alias Exorrent.Peer
-  alias Exorrent.TorrentParser
 
   use GenServer
   require Logger
+
+  @pstr "BitTorrent Protocol"
 
   # -------------------
   #   GenServer calls
@@ -23,8 +24,11 @@ defmodule Exorrent.PeerConnection do
   def send_handshake(pid, msg),
     do: GenServer.cast(pid, {:send_tcp, msg})
 
-  def tcp_response(pid),
-    do: GenServer.call(pid, :tcp_response)
+  def complete_handshake(pid),
+    do: GenServer.call(pid, :handshake_response, 15000)
+
+  def terminate_connection(pid),
+    do: GenServer.cast(pid, :terminate)
 
   # ----------------------
   #   GenServer functions
@@ -34,8 +38,10 @@ defmodule Exorrent.PeerConnection do
     {:ok, peer}
   end
 
-  def handle_cast(:terminate, state),
-    do: {:stop, :normal, state}
+  def handle_cast(:terminate, state) do
+    :gen_tcp.close(state.socket)
+    {:stop, :normal, state}
+  end
 
   def handle_cast(:connect, state) do
     %Peer{ip: ip, port: port} = state
@@ -63,20 +69,18 @@ defmodule Exorrent.PeerConnection do
     {:noreply, state}
   end
 
-  def handle_call(:tcp_response, _from, state) do
+  def handle_call(:handshake_response, _from, state) do
     Logger.debug("Reading data from socket: #{inspect(state.socket)}")
+    socket = state.socket
 
-    case :gen_tcp.recv(state.socket, 68) do
-      {:ok, data} ->
-        # parse_msg(data)
-        {:reply, data, state}
-
-      {:error, reason} ->
-        Logger.error(
-          "Failed to receive msg in socket: #{inspect(state.socket)} reason:#{inspect(reason)}"
-        )
-
-        {:reply, :failed, state}
+    with {:ok, <<len::8>>} <- :gen_tcp.recv(socket, 1),
+         {:ok, pstr} <- :gen_tcp.recv(socket, len),
+         {:ok, _reserved} <- :gen_tcp.recv(socket, 8),
+         {:ok, info_hash} <- :gen_tcp.recv(socket, 20) do
+      case pstr do
+        @pstr -> {:reply, info_hash, state}
+        _ -> {:reply, :error, state}
+      end
     end
   end
 
@@ -97,12 +101,30 @@ defmodule Exorrent.PeerConnection do
   # --------------------
 
   def build_handshake(torrent) do
-    pstr = "BitTorrent protocol"
-    pstrlen = byte_size(pstr)
+    pstrlen = byte_size(@pstr)
     reserved = <<0::64>>
-    info_hash = TorrentParser.get_info_hash(torrent)
+    info_hash = torrent.info_hash
     peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
 
-    <<pstrlen::8, pstr::binary, reserved::binary, info_hash::binary-size(20), peer_id::binary>>
+    <<pstrlen::8, @pstr::binary, reserved::binary, info_hash::binary-size(20), peer_id::binary>>
+  end
+
+  def parse_tcp_response(msg) do
+    case msg do
+      <<0::32, _id::8, _>> ->
+        :keep_alive
+
+      <<1::32, 0::8, _>> ->
+        :choke
+
+      <<0::32, 1::8, _>> ->
+        :unchoke
+
+      <<1::32, 2::8, _>> ->
+        :interested
+
+      <<1::32, 3::8, _>> ->
+        :not_interested
+    end
   end
 end
