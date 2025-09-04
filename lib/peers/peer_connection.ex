@@ -4,7 +4,7 @@ defmodule Exorrent.PeerConnection do
   use GenServer
   require Logger
 
-  @pstr "BitTorrent Protocol"
+  @pstr "BitTorrent protocol"
 
   # -------------------
   #   GenServer calls
@@ -25,7 +25,10 @@ defmodule Exorrent.PeerConnection do
     do: GenServer.cast(pid, {:send_tcp, msg})
 
   def handshake_response(pid),
-    do: GenServer.call(pid, :handshake_response, 15000)
+    do: GenServer.call(pid, :handshake_response)
+
+  def complete_handshake(pid),
+    do: GenServer.cast(pid, :complete_handshake)
 
   def terminate_connection(pid),
     do: GenServer.cast(pid, :terminate)
@@ -69,17 +72,32 @@ defmodule Exorrent.PeerConnection do
     {:noreply, state}
   end
 
+  def handle_cast(:complete_handshake, state) do
+    Logger.debug("=== Completing handshake")
+    socket = state.socket
+
+    case :gen_tcp.recv(socket, 20) do
+      {:ok, _peer_id} ->
+        :gen_tcp.controlling_process(socket, self())
+
+      _ ->
+        :gen_tcp.close(socket)
+    end
+
+    {:noreply, state}
+  end
+
   def handle_call(:handshake_response, _from, state) do
-    Logger.debug("Reading data from socket: #{inspect(state.socket)}")
+    Logger.info("Reading data from socket: #{inspect(state.socket)}")
     socket = state.socket
 
     with {:ok, <<len::8>>} <- :gen_tcp.recv(socket, 1),
          {:ok, pstr} <- :gen_tcp.recv(socket, len),
          {:ok, _reserved} <- :gen_tcp.recv(socket, 8),
          {:ok, info_hash} <- :gen_tcp.recv(socket, 20) do
-      case pstr do
-        @pstr -> {:reply, info_hash, state}
-        _ -> {:reply, :error, state}
+      cond do
+        @pstr === pstr -> {:reply, {:ok, info_hash}, state}
+        true -> {:reply, :error, state}
       end
     end
   end

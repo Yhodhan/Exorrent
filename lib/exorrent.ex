@@ -30,6 +30,9 @@ defmodule Exorrent do
     if info_hash != torrent.info_hash do
       Logger.info("=== Received answer does not match info hash")
       PeerConnection.terminate_connection(peer.pid)
+    else
+      Logger.info("=== Received answer match info hash")
+      PeerConnection.complete_handshake(peer.pid)
     end
   end
 
@@ -47,25 +50,20 @@ defmodule Exorrent do
   #       helpers
   # -------------------
 
-  def broadcast() do
-    PeerManager.broadcast()
-  end
+  def broadcast(),
+    do: PeerManager.broadcast()
 
-  def check_peers_status() do
-    PeerManager.check_peers_connections()
-  end
+  def check_peers_status(),
+    do: PeerManager.check_peers_connections()
 
-  def get_peers() do
-    PeerManager.get_peers()
-  end
+  def get_peers(),
+    do: PeerManager.get_peers()
 
-  def get_connected_peers() do
-    PeerManager.get_connected_peers()
-  end
+  def get_connected_peers(),
+    do: PeerManager.get_connected_peers()
 
-  def terminate_unconnected_peers() do
-    PeerManager.terminate_unconnected_peers()
-  end
+  def terminate_unconnected_peers(),
+    do: PeerManager.terminate_unconnected_peers()
 
   def reconnect() do
     PeerManager.kill()
