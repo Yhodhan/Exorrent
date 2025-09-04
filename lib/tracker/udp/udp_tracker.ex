@@ -22,10 +22,10 @@ defmodule Tracker.UdpTracker do
     do: GenServer.cast(pid, {:send_udp, msg, port})
 
   def udp_response(pid),
-    do: GenServer.call(pid, :udp_response, 15000)
+    do: GenServer.cast(pid, {:udp_response, self()})
 
   def get_tracker_data(pid),
-    do: GenServer.call(pid, :state)
+    do: GenServer.cast(pid, :state)
 
   def conn_down(pid),
     do: send(pid, :death)
@@ -47,28 +47,31 @@ defmodule Tracker.UdpTracker do
     {:noreply, state}
   end
 
+  def handle_cast({:udp_response, pid}, state) do
+    case :gen_udp.recv(state.socket, 0, 15000) do
+      {:ok, {_from_ip, _from_port, received_msg}} ->
+        Logger.info("=== Response received")
+        response = process_message(received_msg)
+        send(pid, {:ok, response})
+        {:noreply, state}
+
+      {:error, :timeout} ->
+        Logger.error("=== Failed to received msg in 5 seconds")
+        send(pid, :timeout)
+        {:noreply, state}
+
+      {:error, reason} ->
+        Logger.error("=== Failed to received msg: #{inspect(reason)}")
+        send(pid, :error)
+        {:noreply, state}
+    end
+  end
+
   # debugging reasons, check the state of the gen server
   def handle_call(:state, _from, state),
     do: {:reply, state, state}
 
   # check if response from the tracker was get
-  def handle_call(:udp_response, _from, state) do
-    case :gen_udp.recv(state.socket, 0, 15000) do
-      {:ok, {_from_ip, _from_port, received_msg}} ->
-        Logger.info("=== Response received")
-        response = process_message(received_msg)
-        {:reply, response, state}
-
-      {:error, :timeout} ->
-        Logger.error("=== Failed to received msg in 5 seconds")
-        {:reply, :timeout, state}
-
-      {:error, reason} ->
-        Logger.error("=== Failed to received msg: #{inspect(reason)}")
-        {:reply, :failed, state}
-    end
-  end
-
   def handle_info(:death, state) do
     :gen_udp.close(state.socket)
     {:stop, :normal, state}
@@ -82,20 +85,42 @@ defmodule Tracker.UdpTracker do
     msg = udp_connection_req()
     udp_message(pid, msg)
 
-    response = udp_response(pid)
-    announce = announce(pid, response.conn_id, torrent)
+    udp_response(pid)
 
-    conn_down(pid)
+    case await_response() do
+      :error ->
+        conn_down(pid)
+        []
 
-    announce.peers
+      {:ok, response} ->
+        announce(pid, response.conn_id, torrent)
+    end
   end
 
   defp announce(pid, conn_id, torrent) do
     msg = udp_announce_req(conn_id, torrent)
-
     udp_message(pid, msg)
 
     udp_response(pid)
+
+    case await_response() do
+      :error ->
+        conn_down(pid)
+        []
+
+      {:ok, announce} ->
+        announce.peers
+    end
+  end
+
+  defp await_response() do
+    receive do
+      {:ok, response} ->
+        {:ok, response}
+
+      _ ->
+        :error
+    end
   end
 
   defp get_ip_from_host(raw_host) do

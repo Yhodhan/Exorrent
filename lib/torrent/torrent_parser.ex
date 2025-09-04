@@ -18,7 +18,6 @@ defmodule Exorrent.TorrentParser do
 
   def size(%{"info" => info}), do: size(info)
   def size(%{"length" => length}), do: length
-
   def size(%{"files" => files}) do
     files
     |> Enum.map(fn f -> f["length"] end)

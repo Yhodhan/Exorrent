@@ -5,13 +5,11 @@ defmodule Exorrent do
   alias Exorrent.PeerConnection
 
   def connection() do
-    {:ok, torrent} = TorrentParser.read_torrent("test.torrent")
+    {:ok, torrent} = TorrentParser.read_torrent("bunny.torrent")
 
     peers = Tracker.get_peers(torrent)
-
     # init swarm of peers
-    {:ok, _pid} = PeerManager.start_link(peers)
-
+#    {:ok, _pid} = PeerManager.start_link(peers)
     peers
   end
 
@@ -59,7 +57,7 @@ defmodule Exorrent do
 
   # helper
   def torrent() do
-    {:ok, torrent} = TorrentParser.read_torrent("test.torrent")
+    {:ok, torrent} = TorrentParser.read_torrent("bunny.torrent")
     torrent
   end
 end

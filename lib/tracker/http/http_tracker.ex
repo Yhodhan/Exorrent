@@ -50,7 +50,7 @@ defmodule Tracker.HttpTracker do
     }
 
     query = URI.encode_query(params)
-    "https://#{uri.host}#{uri.path}?#{query}"
+    "#{uri.scheme}://#{uri.authority}#{uri.path}?#{query}"
   end
 
   defp encode_peers(%{"peers" => peers}),

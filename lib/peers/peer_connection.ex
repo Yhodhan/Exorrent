@@ -107,9 +107,4 @@ defmodule Exorrent.PeerConnection do
 
     <<pstrlen::8, pstr::binary, reserved::binary, info_hash::binary, peer_id::binary>>
   end
-
-  #  def parse_msg(data) do
-  #    case data do
-  #    end
-  #  end
 end
