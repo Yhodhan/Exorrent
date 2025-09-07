@@ -7,6 +7,12 @@ defmodule Exorrent.Decoder do
     {:ok, data}
   end
 
+  def decode_bencode(bencode) when is_list(bencode) do
+    bencode
+    |> :binary.list_to_bin()
+    |> decode_bencode()
+  end
+
   def decode_bencode(<<?d, dic::binary>>),
     do: decode_dictionary(dic)
 
