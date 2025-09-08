@@ -2,7 +2,6 @@ defmodule Peers.Worker do
   alias Peers.Messages
 
   use GenServer
-
   require Logger
 
   # -------------------

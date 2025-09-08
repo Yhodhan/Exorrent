@@ -85,28 +85,4 @@ defmodule Exorrent.PeerConnection do
       size: peer.size
     }
   end
-
-  # --------------------
-  #     Connection
-  # --------------------
-
-
-  def parse_tcp_response(msg) do
-    case msg do
-      <<0::32, _id::8, _>> ->
-        :keep_alive
-
-      <<1::32, 0::8, _>> ->
-        :choke
-
-      <<0::32, 1::8, _>> ->
-        :unchoke
-
-      <<1::32, 2::8, _>> ->
-        :interested
-
-      <<1::32, 3::8, _>> ->
-        :not_interested
-    end
-  end
 end
