@@ -1,5 +1,6 @@
 defmodule Peers.Messages do
   alias Exorrent.Peer
+
   @pstr "BitTorrent protocol"
 
   # ----------------------
@@ -80,6 +81,69 @@ defmodule Peers.Messages do
 
       _ ->
         :unknown_operation
+    end
+  end
+
+  # ---------------------
+  #     Exchange msgs
+  # ---------------------
+
+  def keep_alive(),
+    do: <<0::32>>
+
+  def choke(),
+    do: <<1::32, 0::8>>
+
+  def unchoke(),
+    do: <<1::32, 1::8>>
+
+  def interested(),
+    do: <<1::32, 2::8>>
+
+  def not_interested(),
+    do: <<1::32, 3::8>>
+
+  def have(piece_index),
+    do: <<5::32, 4::8, piece_index::binary>>
+
+  def bitfield(len, bitfield) do
+    index = 1 + len
+    <<index::32, 5::8, bitfield::binary>>
+  end
+
+  def request(index, begin, len),
+    do: <<13::32, 6::8, index::binary, begin::binary, len::binary>>
+
+  def piece(block_len, index, begin, block) do
+    len = 9 + block_len
+    <<len::32, 7::8, index::binary, begin::binary, block::binary>>
+  end
+
+  def cancel(index, begin, len),
+    do: <<13::32, 8::8, index::binary, begin::binary, len::binary>>
+
+  def port(listen_port),
+    do: <<3::32, 9::8, listen_port::binary>>
+
+  # -------------------
+  #    Peer responses
+  # -------------------
+  def peer_response(message) do
+    case message do
+      <<0::28>> ->
+        :keep_alive
+
+      <<0::8>> ->
+        :choke
+
+      <<1::8>> ->
+        :unchoke
+
+      <<2::8>> ->
+        :interested
+
+      <<3::8>> ->
+        :not_interested
     end
   end
 end

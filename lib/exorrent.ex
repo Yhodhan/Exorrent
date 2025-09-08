@@ -3,6 +3,7 @@ defmodule Exorrent do
   alias Exorrent.Tracker
   alias Exorrent.PeerConnection
   alias Peers.Messages
+  alias Peers.Worker
 
   require Logger
 
@@ -26,7 +27,8 @@ defmodule Exorrent do
 
     case PeerConnection.peer_connect(torrent, peer) do
       {:ok, peer} ->
-        handshake(peer)
+        {:ok, pid} = handshake(peer)
+        download(pid)
 
       _ ->
         Logger.info("=== Connection terminated")
@@ -50,7 +52,11 @@ defmodule Exorrent do
   # -------------------
   #       helpers
   # -------------------
-  #
+
+  def download(pid) do
+    Worker.download(pid)
+  end
+
   def reconnect() do
     #    PeerManager.kill()
     init()
