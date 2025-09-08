@@ -1,7 +1,6 @@
 defmodule Exorrent do
   alias Exorrent.Torrent
   alias Exorrent.Tracker
-  alias Exorrent.PeerManager
   alias Exorrent.PeerConnection
 
   require Logger
@@ -13,60 +12,61 @@ defmodule Exorrent do
 
     peers = Tracker.get_peers(torrent)
     # init swarm of peers
-    PeerManager.start_link(peers)
+    #  PeerManager.start_link(peers)
 
     Logger.info("=== Peers found init connection")
-    connection(torrent)
+    connection(torrent, peers)
   end
 
-  def connection(torrent) do
-    broadcast()
+  def connection(torrent, peers) do
+    # broadcast()
 
-    [peer | _] = get_connected_peers()
+    [peer | _] = peers
 
-    Logger.info("=== Init of handhshake")
-    {:ok, info_hash} = init_handshake(torrent, peer)
+    case PeerConnection.peer_connect(torrent, peer) do
+      {:ok, peer} ->
+        handshake(peer)
 
-    if info_hash != torrent.info_hash do
-      Logger.info("=== Received answer does not match info hash")
-      PeerConnection.terminate_connection(peer.pid)
-    else
-      Logger.info("=== Received answer match info hash")
-      PeerConnection.complete_handshake(peer.pid)
+      _ ->
+        Logger.info("=== Connection terminated")
     end
   end
 
-  def init_handshake(torrent, peer) do
-    # Enum.map(peers, fn peer ->
-    handshake = PeerConnection.build_handshake(torrent)
+  def handshake(peer) do
+    Logger.info("=== Init of handhshake")
+    handshake = PeerConnection.build_handshake(peer)
 
-    PeerConnection.send_handshake(peer.pid, handshake)
-
-    PeerConnection.handshake_response(peer.pid)
-    # end)
+    with :ok <- PeerConnection.send_handshake(peer, handshake),
+         :ok <- PeerConnection.handshake_response(peer),
+         {:ok, pid} <- PeerConnection.complete_handshake(peer) do
+      {:ok, pid}
+    else
+      _ ->
+        PeerConnection.terminate_connection(peer)
+    end
   end
 
   # -------------------
   #       helpers
   # -------------------
 
-  def broadcast(),
-    do: PeerManager.broadcast()
-
-  def check_peers_status(),
-    do: PeerManager.check_peers_connections()
-
-  def get_peers(),
-    do: PeerManager.get_peers()
-
-  def get_connected_peers(),
-    do: PeerManager.get_connected_peers()
-
-  def terminate_unconnected_peers(),
-    do: PeerManager.terminate_unconnected_peers()
-
+  #  def broadcast(),
+  #    do: PeerManager.broadcast()
+  #
+  #  def check_peers_status(),
+  #    do: PeerManager.check_peers_connections()
+  #
+  #  def get_peers(),
+  #    do: PeerManager.get_peers()
+  #
+  #  def get_connected_peers(),
+  #    do: PeerManager.get_connected_peers()
+  #
+  #  def terminate_unconnected_peers(),
+  #    do: PeerManager.terminate_unconnected_peers()
+  #
   def reconnect() do
-    PeerManager.kill()
+    #    PeerManager.kill()
     init()
   end
 

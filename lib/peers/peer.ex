@@ -1,5 +1,5 @@
 defmodule Exorrent.Peer do
-  defstruct [:ip, :port, :status, :socket, :pid]
+  defstruct [:socket, :info_hash, :size]
 
   def parse_peers(<<>>), do: []
 
