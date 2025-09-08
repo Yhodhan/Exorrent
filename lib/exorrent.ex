@@ -2,6 +2,7 @@ defmodule Exorrent do
   alias Exorrent.Torrent
   alias Exorrent.Tracker
   alias Exorrent.PeerConnection
+  alias Peers.Messages
 
   require Logger
 
@@ -34,7 +35,7 @@ defmodule Exorrent do
 
   def handshake(peer) do
     Logger.info("=== Init of handhshake")
-    handshake = PeerConnection.build_handshake(peer)
+    handshake = Messages.build_handshake(peer)
 
     with :ok <- PeerConnection.send_handshake(peer, handshake),
          :ok <- PeerConnection.handshake_response(peer),
@@ -49,28 +50,12 @@ defmodule Exorrent do
   # -------------------
   #       helpers
   # -------------------
-
-  #  def broadcast(),
-  #    do: PeerManager.broadcast()
-  #
-  #  def check_peers_status(),
-  #    do: PeerManager.check_peers_connections()
-  #
-  #  def get_peers(),
-  #    do: PeerManager.get_peers()
-  #
-  #  def get_connected_peers(),
-  #    do: PeerManager.get_connected_peers()
-  #
-  #  def terminate_unconnected_peers(),
-  #    do: PeerManager.terminate_unconnected_peers()
   #
   def reconnect() do
     #    PeerManager.kill()
     init()
   end
 
-  # helper
   def torrent() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
     torrent

@@ -90,14 +90,6 @@ defmodule Exorrent.PeerConnection do
   #     Connection
   # --------------------
 
-  def build_handshake(peer) do
-    pstrlen = byte_size(@pstr)
-    reserved = <<0::64>>
-    info_hash = peer.info_hash
-    peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
-
-    <<pstrlen::8, @pstr::binary, reserved::binary, info_hash::binary-size(20), peer_id::binary>>
-  end
 
   def parse_tcp_response(msg) do
     case msg do
