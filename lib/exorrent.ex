@@ -25,7 +25,8 @@ defmodule Exorrent do
     case PeerConnection.peer_connect(torrent, peer) do
       {:ok, peer} ->
         {:ok, pid} = handshake(peer)
-        download(pid)
+        Worker.init_cycle(pid)
+        pid
 
       _ ->
         Logger.info("=== Connection terminated")
@@ -50,9 +51,6 @@ defmodule Exorrent do
   #       helpers
   # -------------------
 
-  def download(pid),
-    do: Worker.download(pid)
-
   def raw_torrent() do
     {:ok, raw_data} = File.read(@torrent)
     {:ok, torr} = Exorrent.Decoder.decode(raw_data)
@@ -62,5 +60,8 @@ defmodule Exorrent do
   def torrent() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
     torrent
+  end
+
+  def alive_peer() do
   end
 end

@@ -1,6 +1,5 @@
 defmodule Peers.Worker do
   alias Peers.Messages
-
   use GenServer
   require Logger
 
@@ -14,67 +13,59 @@ defmodule Peers.Worker do
   def return_state(pid),
     do: GenServer.call(pid, :state)
 
-  #  def download(pid),
-  #    do: GenServer.call(pid, :init_download)
+  def init_cycle(pid),
+    do: send(pid, :cycle)
 
   # ----------------------
   #   GenServer functions
   # ----------------------
 
-  def init(state),
-    do: {:ok, state}
+  def init(state) do
+    Process.flag(:trap_exit, true)
+    {:ok, state}
+  end
 
-  def handle_call(:state, _from, state),
-    do: {:reply, state, state}
+  def handle_info(
+        :cycle,
+        %{socket: socket, status: :idle, choke: true, interested: false} = state
+      ) do
+    Logger.info("=== Send interest message")
+    interes = Messages.interested()
 
-  def handle_info(:cycle, %{socket: socket, status: :idle} = state) do
-    with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 5000),
+    :gen_tcp.send(socket, interes)
+    Process.send_after(self(), :cycle, 1)
+
+    {:noreply, %{state | interested: true}}
+  end
+
+  def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
+    Logger.info("=== Worker Cycle")
+
+    with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
          {:ok, id, len} <- peer_message(len, socket),
          {:ok, new_state} <- process_message(id, len, state) do
-      Process.send_after(self(), :cycle, 0)
+      Process.send_after(self(), :cycle, 10)
       {:noreply, new_state}
     else
-      :keep_alive ->
-        Process.send_after(self(), :cycle, 0)
-        {:noreply, state}
-
-      {:error, :timeout} ->
-        Process.send_after(self(), :cycle, 100)
-        {:noreply, state}
-
-      {:error, :closed} ->
-        :gen_tcp.close(socket)
-        {:stop, :normal, state}
+      error ->
+        handle_error(error, state, socket)
     end
   end
 
-  #  def handle_call(:init_download, _from, %{socket: socket} = state) do
-  #    Logger.info("=== Init download from port: #{inspect(socket)}")
-  #    interes_msg = Messages.interested()
-  #
-  #    :gen_tcp.send(socket, interes_msg)
-  #
-  #    with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 15000),
-  #         {:ok, id} <- :gen_tcp.recv(socket, len) do
-  #      Logger.info("=== Response from peer: #{inspect(id)}")
-  #      response = peer_response(id)
-  #
-  #      {:reply, response, state}
-  #    else
-  #      _ ->
-  #        Logger.error("=== Failed sending interest message")
-  #        {:reply, :error, state}
-  #    end
-  #  end
+  def handle_info(msg, state) do
+    Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
+    {:noreply, state}
+  end
 
   # -------------------
   #  Private functions
   # -------------------
-  def peer_message(<<0::32>>, _socket),
+  def peer_message(0, _socket),
     do: :keep_alive
 
-  def peer_message(<<len::32>>, socket) do
-    with {:ok, id} <- :gen_tcp.recv(socket, 1) do
+  def peer_message(len, socket) do
+    # Logger.info("bytes len of message #{byte_size(len)}")
+    with {:ok, <<id::8>>} <- :gen_tcp.recv(socket, 1, 100) do
       {:ok, id, len - 1}
     end
   end
@@ -96,6 +87,40 @@ defmodule Peers.Worker do
     do: {:ok, %{state | interested: false}}
 
   # have
-  def process_message(4, _len, state) do
+  def process_message(4, len, %{socket: socket} = state) do
+    with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
+      Logger.info("=== Piece obtained: #{inspect(piece_index)}")
+      {:ok, state}
+    end
+  end
+
+  # bitfield
+  def process_message(5, len, %{socket: socket} = state) do
+    with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
+      Logger.info("=== Bitfield obtained: #{inspect(bitfield)}")
+      {:ok, %{state | bitfield: bitfield}}
+    end
+  end
+
+  # -----------------------------------
+  #     Handle keep alive and errors
+  # -----------------------------------
+
+  defp handle_error(error, state, socket) do
+    case error do
+      :keep_alive ->
+        Logger.error("=== connection alive")
+        Process.send_after(self(), :cycle, 0)
+        {:noreply, state}
+
+      {:error, :timeout} ->
+        Process.send_after(self(), :cycle, 100)
+        {:noreply, state}
+
+      {:error, :closed} ->
+        Logger.error("=== Coneccion closed in worker: #{inspect(self())}")
+        :gen_tcp.close(socket)
+        {:stop, :normal, state}
+    end
   end
 end
