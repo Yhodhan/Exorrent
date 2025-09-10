@@ -49,12 +49,13 @@ defmodule Exorrent.PeerConnection do
     %Peer{socket: socket} = peer
 
     case :gen_tcp.recv(socket, 20) do
-      {:ok, _peer_id} ->
-        conn_data = get_data(peer)
-        {:ok, pid} = Worker.start_link(conn_data)
-        :gen_tcp.controlling_process(socket, pid)
+      {:ok, peer_id} ->
+        peer_state = peer_state(peer, peer_id)
 
-        {:ok, pid}
+        {:ok, worker_pid} = Worker.start_link(peer_state)
+        :gen_tcp.controlling_process(socket, worker_pid)
+
+        {:ok, worker_pid}
 
       _ ->
         :error
@@ -78,11 +79,17 @@ defmodule Exorrent.PeerConnection do
     }
   end
 
-  defp get_data(peer) do
+  defp peer_state(peer, peer_id) do
     %{
       socket: peer.socket,
       info_hash: peer.info_hash,
-      size: peer.size
+      size: peer.size,
+      peer_id: peer_id,
+      status: :idle,
+      choke: true,
+      unchoked: false,
+      interested: false,
+      bitfield: %MapSet{}
     }
   end
 end

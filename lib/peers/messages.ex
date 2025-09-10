@@ -7,12 +7,10 @@ defmodule Peers.Messages do
   #         TCP
   # ----------------------
   def build_handshake(peer) do
-    pstrlen = byte_size(@pstr)
-    reserved = <<0::64>>
     info_hash = peer.info_hash
     peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
 
-    <<pstrlen::8, @pstr::binary, reserved::binary, info_hash::binary-size(20), peer_id::binary>>
+    <<byte_size(@pstr)::8, @pstr::bytes, 0::64, info_hash::binary-size(20), peer_id::binary>>
   end
 
   def http_connection_req(torrent, uri, port \\ 6881) do
@@ -124,26 +122,4 @@ defmodule Peers.Messages do
 
   def port(listen_port),
     do: <<3::32, 9::8, listen_port::binary>>
-
-  # -------------------
-  #    Peer responses
-  # -------------------
-  def peer_response(message) do
-    case message do
-      <<0::28>> ->
-        :keep_alive
-
-      <<0::8>> ->
-        :choke
-
-      <<1::8>> ->
-        :unchoke
-
-      <<2::8>> ->
-        :interested
-
-      <<3::8>> ->
-        :not_interested
-    end
-  end
 end

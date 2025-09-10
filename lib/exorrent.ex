@@ -13,16 +13,13 @@ defmodule Exorrent do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
 
     peers = Tracker.get_peers(torrent)
-    # init swarm of peers
-    #  PeerManager.start_link(peers)
 
     Logger.info("=== Peers found init connection")
+
     connection(torrent, peers)
   end
 
   def connection(torrent, peers) do
-    # broadcast()
-
     [peer | _] = peers
 
     case PeerConnection.peer_connect(torrent, peer) do
@@ -41,8 +38,8 @@ defmodule Exorrent do
 
     with :ok <- PeerConnection.send_handshake(peer, handshake),
          :ok <- PeerConnection.handshake_response(peer),
-         {:ok, pid} <- PeerConnection.complete_handshake(peer) do
-      {:ok, pid}
+         {:ok, worker_pid} <- PeerConnection.complete_handshake(peer) do
+      {:ok, worker_pid}
     else
       _ ->
         PeerConnection.terminate_connection(peer)
@@ -53,13 +50,13 @@ defmodule Exorrent do
   #       helpers
   # -------------------
 
-  def download(pid) do
-    Worker.download(pid)
-  end
+  def download(pid),
+    do: Worker.download(pid)
 
-  def reconnect() do
-    #    PeerManager.kill()
-    init()
+  def raw_torrent() do
+    {:ok, raw_data} = File.read(@torrent)
+    {:ok, torr} = Exorrent.Decoder.decode(raw_data)
+    torr
   end
 
   def torrent() do
