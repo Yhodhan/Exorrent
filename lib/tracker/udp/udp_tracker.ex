@@ -1,5 +1,5 @@
 defmodule Tracker.UdpTracker do
-  alias Exorrent.Peer
+  alias Peers.Messages
 
   use GenServer
   require Logger
@@ -51,7 +51,7 @@ defmodule Tracker.UdpTracker do
     case :gen_udp.recv(state.socket, 0, 15000) do
       {:ok, {_from_ip, _from_port, received_msg}} ->
         Logger.info("=== Response received")
-        response = process_message(received_msg)
+        response = Messages.parse_udp_message(received_msg)
         send(pid, {:ok, response})
         {:noreply, state}
 
@@ -82,7 +82,7 @@ defmodule Tracker.UdpTracker do
   # ------------------
 
   defp udp_connection(pid, torrent) do
-    msg = udp_connection_req()
+    msg = Messages.udp_connection_req()
     udp_message(pid, msg)
 
     with :ok <- udp_response(pid),
@@ -98,7 +98,7 @@ defmodule Tracker.UdpTracker do
   end
 
   defp announce(pid, conn_id, torrent) do
-    msg = udp_announce_req(conn_id, torrent)
+    msg = Messages.udp_announce_req(conn_id, torrent)
     udp_message(pid, msg)
 
     udp_response(pid)
@@ -124,55 +124,6 @@ defmodule Tracker.UdpTracker do
       {:error, reason} ->
         Logger.error("=== Failed to resolve host #{inspect(reason)}")
         {:error, reason}
-    end
-  end
-
-  defp udp_connection_req() do
-    protocol_id = 0x41727101980
-    tx_id = :crypto.strong_rand_bytes(4)
-
-    <<protocol_id::64, 0::32, tx_id::binary>>
-  end
-
-  defp udp_announce_req(connection_id, torrent, port \\ 6881) do
-    action = 1
-    tx_id = :crypto.strong_rand_bytes(4)
-    info_hash = torrent.info_hash
-    downloaded = 0
-    peer_id = :crypto.strong_rand_bytes(20)
-    left = torrent.size
-    uploaded = 0
-    event = 0
-    ip_address = 0
-    key = :crypto.strong_rand_bytes(4)
-    num_want = -1
-
-    <<connection_id::64, action::32, tx_id::binary, info_hash::binary, peer_id::binary, left::64,
-      downloaded::64, uploaded::64, event::32, ip_address::32, key::binary, num_want::signed-32,
-      port::16>>
-  end
-
-  defp process_message(msg) do
-    case msg do
-      # connection
-      <<0::32, tx_id::32, conn_id::64>> ->
-        %{action: :connection, tx_id: tx_id, conn_id: conn_id}
-
-      # announce
-      <<1::32, tx_id::32, interval::32, leechers::32, seeders::32, peers::binary>> ->
-        peers_ips = Peer.parse_peers(peers)
-
-        %{
-          action: :announce,
-          tx_id: tx_id,
-          interval: interval,
-          leechers: leechers,
-          seeders: seeders,
-          peers: peers_ips
-        }
-
-      _ ->
-        :unknown_operation
     end
   end
 end

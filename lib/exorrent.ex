@@ -1,8 +1,9 @@
 defmodule Exorrent do
   alias Exorrent.Torrent
   alias Exorrent.Tracker
-  alias Exorrent.PeerManager
   alias Exorrent.PeerConnection
+  alias Peers.Messages
+  alias Peers.Worker
 
   require Logger
 
@@ -12,67 +13,55 @@ defmodule Exorrent do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
 
     peers = Tracker.get_peers(torrent)
-    # init swarm of peers
-    PeerManager.start_link(peers)
 
     Logger.info("=== Peers found init connection")
-    connection(torrent)
+
+    connection(torrent, peers)
   end
 
-  def connection(torrent) do
-    broadcast()
+  def connection(torrent, peers) do
+    [peer | _] = peers
 
-    [peer | _] = get_connected_peers()
+    case PeerConnection.peer_connect(torrent, peer) do
+      {:ok, peer} ->
+        {:ok, pid} = handshake(peer)
+        Worker.init_cycle(pid)
+        pid
 
-    Logger.info("=== Init of handhshake")
-    {:ok, info_hash} = init_handshake(torrent, peer)
-
-    if info_hash != torrent.info_hash do
-      Logger.info("=== Received answer does not match info hash")
-      PeerConnection.terminate_connection(peer.pid)
-    else
-      Logger.info("=== Received answer match info hash")
-      PeerConnection.complete_handshake(peer.pid)
+      _ ->
+        Logger.info("=== Connection terminated")
     end
   end
 
-  def init_handshake(torrent, peer) do
-    # Enum.map(peers, fn peer ->
-    handshake = PeerConnection.build_handshake(torrent)
+  def handshake(peer) do
+    Logger.info("=== Init of handhshake")
+    handshake = Messages.build_handshake(peer)
 
-    PeerConnection.send_handshake(peer.pid, handshake)
-
-    PeerConnection.handshake_response(peer.pid)
-    # end)
+    with :ok <- PeerConnection.send_handshake(peer, handshake),
+         :ok <- PeerConnection.handshake_response(peer),
+         {:ok, worker_pid} <- PeerConnection.complete_handshake(peer) do
+      {:ok, worker_pid}
+    else
+      _ ->
+        PeerConnection.terminate_connection(peer)
+    end
   end
 
   # -------------------
   #       helpers
   # -------------------
 
-  def broadcast(),
-    do: PeerManager.broadcast()
-
-  def check_peers_status(),
-    do: PeerManager.check_peers_connections()
-
-  def get_peers(),
-    do: PeerManager.get_peers()
-
-  def get_connected_peers(),
-    do: PeerManager.get_connected_peers()
-
-  def terminate_unconnected_peers(),
-    do: PeerManager.terminate_unconnected_peers()
-
-  def reconnect() do
-    PeerManager.kill()
-    init()
+  def raw_torrent() do
+    {:ok, raw_data} = File.read(@torrent)
+    {:ok, torr} = Exorrent.Decoder.decode(raw_data)
+    torr
   end
 
-  # helper
   def torrent() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
     torrent
+  end
+
+  def alive_peer() do
   end
 end
