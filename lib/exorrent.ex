@@ -1,7 +1,7 @@
 defmodule Exorrent do
   alias Exorrent.Torrent
   alias Exorrent.Tracker
-  alias Exorrent.PeerConnection
+  alias Peers.PeerConnection
   alias Peers.Messages
   alias Peers.Worker
 
@@ -53,7 +53,7 @@ defmodule Exorrent do
 
   def raw_torrent() do
     {:ok, raw_data} = File.read(@torrent)
-    {:ok, torr} = Exorrent.Decoder.decode(raw_data)
+    {:ok, torr} = Bencoder.Decoder.decode(raw_data)
     torr
   end
 

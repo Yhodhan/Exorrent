@@ -1,4 +1,4 @@
-defmodule Exorrent.PeerConnection do
+defmodule Peers.PeerConnection do
   alias Exorrent.Peer
   alias Peers.Worker
 

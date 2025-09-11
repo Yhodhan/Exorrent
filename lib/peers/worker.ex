@@ -109,7 +109,7 @@ defmodule Peers.Worker do
   defp handle_error(error, state, socket) do
     case error do
       :keep_alive ->
-        Logger.error("=== connection alive")
+        Logger.error("=== Connection alive")
         Process.send_after(self(), :cycle, 0)
         {:noreply, state}
 

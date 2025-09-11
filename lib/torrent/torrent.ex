@@ -1,32 +1,36 @@
 defmodule Exorrent.Torrent do
-  alias Exorrent.Decoder
-  alias Exorrent.Encoder
+  alias Bencoder.Decoder
+  alias Bencoder.Encoder
 
-  defstruct [:info_hash, :size, :trackers]
+  defstruct [:info_hash, :size, :trackers, :total_pieces]
 
   def read_torrent(torrent) do
     with {:ok, bencode} <- File.read(torrent),
          {:ok, torr} <- Decoder.decode(bencode),
          {:ok, info_hash} <- get_info_hash(torr),
-         trackers <- get_trackers(torr),
+         {:ok, trackers} <- get_trackers(torr),
          size <- size(torr) do
       {:ok,
        %__MODULE__{
          info_hash: info_hash,
          size: size,
-         trackers: trackers
+         trackers: trackers,
+         total_pieces: amount_pieces(torr)
        }}
     end
   end
 
+  def amount_pieces(%{"info" => info}),
+    do: byte_size(info["pieces"])
+
   def get_info_hash(%{"info" => info}) do
-    raw_data = Encoder.encode(info)
+    {:ok, raw_data} = Encoder.encode(info)
     # swarm id
     {:ok, :crypto.hash(:sha, raw_data)}
   end
 
-  def get_trackers(%{"announce-list" => announce_list}), do: List.flatten(announce_list)
-  def get_trackers(%{"announce" => announce}), do: [announce]
+  def get_trackers(%{"announce-list" => announce_list}), do: {:ok, List.flatten(announce_list)}
+  def get_trackers(%{"announce" => announce}), do: {:ok, [announce]}
 
   def size(%{"info" => info}), do: size(info)
   def size(%{"length" => length}), do: length

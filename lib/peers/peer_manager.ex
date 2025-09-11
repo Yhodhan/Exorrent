@@ -1,4 +1,4 @@
-defmodule Exorrent.PeerManager do
+defmodule Peers.PeerManager do
 #  alias Exorrent.PeerConnection
 #  alias Exorrent.Peer
 #  use Supervisor
