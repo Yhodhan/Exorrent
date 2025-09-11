@@ -1,6 +1,6 @@
 defmodule Tracker.HttpTracker do
-  alias Exorrent.Decoder
-  alias Exorrent.Peer
+  alias Bencoder.Decoder
+  alias Peers.Peer
   alias Peers.Messages
 
   require Logger

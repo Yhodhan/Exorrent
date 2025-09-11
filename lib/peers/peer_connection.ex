@@ -1,5 +1,5 @@
 defmodule Peers.PeerConnection do
-  alias Exorrent.Peer
+  alias Peers.Peer
   alias Peers.Worker
 
   require Logger
@@ -75,7 +75,8 @@ defmodule Peers.PeerConnection do
     %Peer{
       socket: socket,
       info_hash: torrent.info_hash,
-      size: torrent.size
+      size: torrent.size,
+      total_pieces: torrent.total_pieces
     }
   end
 
@@ -89,7 +90,8 @@ defmodule Peers.PeerConnection do
       choke: true,
       unchoked: false,
       interested: false,
-      bitfield: %MapSet{}
+      bitfield: %MapSet{},
+      total_pieces: peer.total_pieces
     }
   end
 end

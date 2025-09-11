@@ -1,5 +1,6 @@
 defmodule Peers.Worker do
   alias Peers.Messages
+
   use GenServer
   require Logger
 
@@ -110,6 +111,7 @@ defmodule Peers.Worker do
     case error do
       :keep_alive ->
         Logger.error("=== Connection alive")
+        send_alive(socket)
         Process.send_after(self(), :cycle, 0)
         {:noreply, state}
 
@@ -122,5 +124,11 @@ defmodule Peers.Worker do
         :gen_tcp.close(socket)
         {:stop, :normal, state}
     end
+  end
+
+  defp send_alive(socket) do
+    Logger.info("=== Sending keep alive")
+    keep_alive = Messages.keep_alive()
+    :gen_tcp.send(socket, keep_alive)
   end
 end

@@ -22,8 +22,8 @@ defmodule Bencoder.Encoder do
     keys = Map.keys(map)
     values = Map.values(map)
 
-    encode_keys = Enum.map(keys, fn k -> encode(k) end)
-    encode_values = Enum.map(values, fn v -> encode(v) end)
+    encode_keys = Enum.map(keys, fn k -> encode_data(k) end)
+    encode_values = Enum.map(values, fn v -> encode_data(v) end)
 
     bin_data =
       Enum.zip(encode_keys, encode_values)
@@ -36,7 +36,7 @@ defmodule Bencoder.Encoder do
   def encode_list(list) do
     bin_data =
       list
-      |> Enum.map(fn elem -> encode(elem) end)
+      |> Enum.map(fn elem -> encode_data(elem) end)
       |> Enum.reduce(<<>>, fn e, acc -> acc <> e end)
 
     <<?l, bin_data::binary, ?e>>

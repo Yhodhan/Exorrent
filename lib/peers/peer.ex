@@ -1,5 +1,5 @@
-defmodule Exorrent.Peer do
-  defstruct [:socket, :info_hash, :size]
+defmodule Peers.Peer do
+  defstruct [:socket, :info_hash, :size, :total_pieces]
 
   def decode_peers(<<>>), do: []
 
