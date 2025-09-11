@@ -21,7 +21,7 @@ defmodule Exorrent.Torrent do
   end
 
   def amount_pieces(%{"info" => info}),
-    do: byte_size(info["pieces"])
+    do: div(byte_size(info["pieces"]), 20)
 
   def get_info_hash(%{"info" => info}) do
     {:ok, raw_data} = Encoder.encode(info)

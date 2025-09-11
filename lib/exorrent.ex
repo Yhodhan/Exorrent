@@ -7,7 +7,7 @@ defmodule Exorrent do
 
   require Logger
 
-  @torrent "ubuntu.torrent"
+  @torrent "torrents/linuxmint.torrent"
 
   def init() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
@@ -22,14 +22,10 @@ defmodule Exorrent do
   def connection(torrent, peers) do
     [peer | _] = peers
 
-    case PeerConnection.peer_connect(torrent, peer) do
-      {:ok, peer} ->
-        {:ok, pid} = handshake(peer)
-        Worker.init_cycle(pid)
-        pid
-
-      _ ->
-        Logger.info("=== Connection terminated")
+    with {:ok, peer} <- PeerConnection.peer_connect(torrent, peer),
+         {:ok, worker_pid} <- handshake(peer) do
+      Worker.init_cycle(worker_pid)
+      worker_pid
     end
   end
 
@@ -42,7 +38,8 @@ defmodule Exorrent do
          {:ok, worker_pid} <- PeerConnection.complete_handshake(peer) do
       {:ok, worker_pid}
     else
-      _ ->
+      error ->
+        Logger.error("=== Handshake error reason: #{inspect(error)}")
         PeerConnection.terminate_connection(peer)
     end
   end
@@ -60,8 +57,5 @@ defmodule Exorrent do
   def torrent() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
     torrent
-  end
-
-  def alive_peer() do
   end
 end

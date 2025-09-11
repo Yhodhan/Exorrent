@@ -63,7 +63,7 @@ defmodule Peers.PeerConnection do
   end
 
   def terminate_connection(peer) do
-    Logger.info("=== Terminating connection to socket: #{peer.socket}")
+    Logger.info("=== Terminating connection to socket: #{inspect(peer.socket)}")
     :gen_tcp.close(peer.socket)
   end
 
@@ -80,6 +80,7 @@ defmodule Peers.PeerConnection do
     }
   end
 
+  # for the Worker GenServer
   defp peer_state(peer, peer_id) do
     %{
       socket: peer.socket,

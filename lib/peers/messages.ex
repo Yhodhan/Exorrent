@@ -1,5 +1,5 @@
 defmodule Peers.Messages do
-  alias Exorrent.Peer
+  alias Peers.Peer
 
   @pstr "BitTorrent protocol"
 
@@ -103,11 +103,6 @@ defmodule Peers.Messages do
 
   def have(piece_index),
     do: <<5::32, 4::8, piece_index::binary>>
-
-  def bitfield(len, bitfield) do
-    index = 1 + len
-    <<index::32, 5::8, bitfield::binary>>
-  end
 
   def request(index, begin, len),
     do: <<13::32, 6::8, index::binary, begin::binary, len::binary>>
