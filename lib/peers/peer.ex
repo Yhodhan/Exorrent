@@ -9,15 +9,16 @@ defmodule Peers.Peer do
     [peer] ++ decode_peers(rest)
   end
 
-  def encode_peers(%{"peers" => peer}) when is_binary(peer) do
-    <<a, b, c, d, port::16>> = peer
-    [{{a, b, c, d}, port}]
-  end
+  def peers_addresses(%{"peers" => peers}) when is_binary(peers),
+    do: decode_peers(peers)
 
-  def encode_peers(%{"peers" => peers}),
-    do: Enum.map(peers, fn p -> encode_peer(p) end)
+  def peers_addresses(%{"peers" => peers}),
+    do: Enum.map(peers, fn p -> peer_address(p) end)
 
-  def encode_peer(%{"ip" => ip, "port" => port}) do
+  # ----------------------
+  #    Private functions
+  # ----------------------
+  defp peer_address(%{"ip" => ip, "port" => port}) do
     {:ok, ip} =
       ip
       |> String.to_charlist()

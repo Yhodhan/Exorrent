@@ -11,11 +11,11 @@ defmodule Tracker.HttpTracker do
     :inets.start()
     :ssl.start()
 
-    case http_message(url) do
-      {:ok, data} ->
-        Peer.encode_peers(data)
-
-      {:error, _reason} ->
+    with {:ok, data} <- http_message(url),
+         {:ok, answer} <- decode_answer(data) do
+      Peer.peers_addresses(answer)
+    else
+      _ ->
         []
     end
   end
@@ -33,4 +33,10 @@ defmodule Tracker.HttpTracker do
         {:error, reason}
     end
   end
+
+  defp decode_answer(data) when is_binary(data),
+    do: Decoder.decode(data)
+
+  defp decode_answer(data),
+      do: {:ok, data}
 end

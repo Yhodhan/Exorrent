@@ -7,7 +7,7 @@ defmodule Exorrent do
 
   require Logger
 
-  @torrent "torrents/linuxmint.torrent"
+  @torrent "torrents/obs.torrent"
 
   def init() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
