@@ -57,7 +57,7 @@ defmodule Peers.Worker do
         :cycle,
         %{socket: socket, status: :idle, interested: true} = state
       ) do
-    # Logger.info("=== Worker Cycle")
+     Logger.info("=== Worker Cycle")
 
     with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
          {:ok, id, len} <- peer_message(len, socket),

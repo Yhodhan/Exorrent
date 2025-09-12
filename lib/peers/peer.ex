@@ -1,7 +1,6 @@
 defmodule Peers.Peer do
-  defstruct [:socket, :info_hash, :size, :total_pieces]
-
-  def decode_peers(<<>>), do: []
+  def decode_peers(<<>>),
+    do: []
 
   def decode_peers(<<a, b, c, d, port::16, rest::binary>>) do
     ip = {a, b, c, d}

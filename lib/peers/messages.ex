@@ -6,8 +6,7 @@ defmodule Peers.Messages do
   # ----------------------
   #         TCP
   # ----------------------
-  def build_handshake(peer) do
-    info_hash = peer.info_hash
+  def build_handshake(info_hash) do
     peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
 
     <<byte_size(@pstr)::8, @pstr::bytes, 0::64, info_hash::binary-size(20), peer_id::binary>>
