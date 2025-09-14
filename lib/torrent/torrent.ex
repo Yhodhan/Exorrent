@@ -39,8 +39,12 @@ defmodule Exorrent.Torrent do
 
   # -----------------
 
-  def get_pieces_map(%{"info" => info}),
-    do: {:ok, pieces_hashes(info["pieces"])}
+  def get_pieces_map(%{"info" => info}) do
+    {:ok,
+     pieces_hashes(info["pieces"])
+     |> Enum.map(fn p -> {p, false} end)
+     |> Enum.reduce(%{}, fn {p, v}, acc -> Map.put(acc, p, v) end)}
+  end
 
   def pieces_hashes(<<>>),
     do: []
