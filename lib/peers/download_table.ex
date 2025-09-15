@@ -15,4 +15,8 @@ defmodule Peers.DownloadTable do
     pieces
     |> Enum.each(fn hash -> :ets.insert(:piece_table, {hash, :incomplete, 0, size}) end)
   end
+
+  def mark_as_done(piece_index) do
+    :ets.update_element(:piece_table, piece_index, {2, :complete})
+  end
 end

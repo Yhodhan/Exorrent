@@ -1,4 +1,5 @@
 defmodule Peers.Worker do
+  alias Peers.DownloadTable
   alias Peers.Downloader
   alias Peers.Messages
   alias Peers.PieceManager
@@ -29,13 +30,13 @@ defmodule Peers.Worker do
   #   GenServer functions
   # ----------------------
 
-  def handle_call(:bitfield, _from, state),
-    do: {:reply, state.bitfield, state}
-
   def init(state) do
     Process.flag(:trap_exit, true)
     {:ok, state}
   end
+
+  def handle_call(:bitfield, _from, state),
+    do: {:reply, state.bitfield, state}
 
   def handle_info(
         :cycle,
@@ -67,14 +68,37 @@ defmodule Peers.Worker do
     end
   end
 
-  def handle_info(:cycle, %{status: :downloading} = state) do
-    Process.send_after(self(), :cycle, 0)
+  def handle_info(:cycle, %{status: :idle, interested: true, got_bitfield: true} = state) do
+    # start requesting
+    queue = state.bitfield
+
+    {:ok, state} =
+      :queue.get(queue)
+      |> request_piece(state)
+
     {:noreply, state}
+  end
+
+  def handle_info(:cycle, %{status: :downloading, bitfield: bitfield} = state) do
+    receive do
+      {:success_donwload, piece_index} ->
+        mark_as_done(piece_index)
+        bitfield = :queue.drop(bitfield)
+
+        Process.send_after(self(), :cycle, 0)
+        {:noreply, %{state | status: :idle, bitfield: bitfield}}
+
+      {:error_download, _piece_index} ->
+        Process.send_after(self(), :cycle, 0)
+        {:noreply, %{state | status: :idle}}
+    after
+      1000 ->
+        {:noreply, %{state | status: :downloading}}
+    end
   end
 
   def handle_info(msg, state) do
     Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
-    IO.inspect(state, label: "unhandled state")
     Process.sleep(2000)
     {:noreply, state}
   end
@@ -127,7 +151,7 @@ defmodule Peers.Worker do
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Bitfield obtained: #{inspect(bitfield)}")
-      {:ok, %{state | bitfield: make_bitfield(bitfield, total_pieces)}}
+      {:ok, %{state | bitfield: make_bitfield(bitfield, total_pieces), got_bitfield: true}}
     end
   end
 
@@ -175,14 +199,19 @@ defmodule Peers.Worker do
     # check with indexes are missing, request them in order
     parent = self()
 
+    # NOTE: this logic cannot happen as the task do not own the socket
     Task.start(fn ->
-      case Downloader.piece_request(piece_index, parent) do
+      case Downloader.request_piece(piece_index, parent) do
         :ok -> send(parent, {:success_download, piece_index})
         :error -> send(parent, {:error_download, piece_index})
       end
     end)
 
     {:ok, %{state | status: :downloading}}
+  end
+
+  defp mark_as_done(piece_index) do
+    DownloadTable.mark_as_done(piece_index)
   end
 
   # -----------------------------------

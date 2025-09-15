@@ -79,6 +79,7 @@ defmodule Peers.PeerConnection do
       bitfield: :queue.new(),
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
+      got_bitfield: false
     }
   end
 end
