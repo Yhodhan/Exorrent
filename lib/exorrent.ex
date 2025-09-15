@@ -22,8 +22,9 @@ defmodule Exorrent do
       {:error, _} ->
         Logger.error("=== Failed download")
 
-      _ ->
+      {:ok, worker_pid} ->
         Logger.info("=== Download in progress")
+        worker_pid
     end
   end
 
@@ -41,15 +42,17 @@ defmodule Exorrent do
       # ---------------------
       DownloadTable.create_table()
       DownloadTable.fill_table(torrent.pieces_list, torrent.piece_length)
+
       # ------------------
       #  Piece manager
       # ------------------
       {:ok, _pid} = PieceManager.start_link(torrent)
+
       # ---------------------
       #     Init downlaod
       # ---------------------
       Worker.init_cycle(worker_pid)
-      worker_pid
+      {:ok, worker_pid}
     else
       _ ->
         connection(torrent, rest)

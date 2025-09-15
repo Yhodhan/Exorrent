@@ -18,6 +18,9 @@ defmodule Peers.PieceManager do
   def store_block(index, begin, block),
     do: GenServer.cast(__MODULE__, {:store_block, index, begin, block})
 
+  def pieces_map(),
+    do: GenServer.call(__MODULE__, :pieces)
+
   # ----------------------
   #   GenServer functions
   # ----------------------
@@ -44,9 +47,9 @@ defmodule Peers.PieceManager do
     # store block in the memory
     block_map =
       Map.get(piece_map, index)
-      |> Map.update!(begin, block)
+      |> Map.put(begin, block)
 
-    {:noreply, Map.update!(piece_map, index, block_map)}
+    {:noreply, Map.put(piece_map, index, block_map)}
   end
 
   def handle_call(:pieces, _from, piece_map),
@@ -55,7 +58,7 @@ defmodule Peers.PieceManager do
   # -------------------
   #  Private functions
   # -------------------
-  def build_block_map(piece_index, total_pieces, piece_length, blocks, size) do
+  defp build_block_map(piece_index, total_pieces, piece_length, blocks, size) do
     num_blocks =
       if piece_index == total_pieces - 1 do
         # last piece, maybe smaller

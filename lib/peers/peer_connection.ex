@@ -76,7 +76,7 @@ defmodule Peers.PeerConnection do
       choke: true,
       unchoked: false,
       interested: false,
-      bitfield: %MapSet{},
+      bitfield: :queue.new(),
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
     }

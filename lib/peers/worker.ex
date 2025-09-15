@@ -1,7 +1,9 @@
 defmodule Peers.Worker do
+  alias Peers.Downloader
   alias Peers.Messages
   alias Peers.PieceManager
 
+  use Task
   use GenServer
   import Bitwise
 
@@ -20,18 +22,12 @@ defmodule Peers.Worker do
   def init_cycle(pid),
     do: send(pid, :cycle)
 
-  def pieces_map(pid),
-    do: GenServer.call(pid, :pieces)
-
   def bitfield_map(pid),
     do: GenServer.call(pid, :bitfield)
 
   # ----------------------
   #   GenServer functions
   # ----------------------
-
-  def handle_call(:pieces, _from, state),
-    do: {:reply, state.peer_pieces, state}
 
   def handle_call(:bitfield, _from, state),
     do: {:reply, state.bitfield, state}
@@ -58,7 +54,7 @@ defmodule Peers.Worker do
         :cycle,
         %{socket: socket, status: :idle, interested: true} = state
       ) do
-    Logger.info("=== Worker Cycle")
+    # Logger.info("=== Worker Cycle")
 
     with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
          {:ok, id, len} <- peer_message(len, socket),
@@ -71,10 +67,10 @@ defmodule Peers.Worker do
     end
   end
 
- # def handle_info(
- #   :cycle,
- #   %{}
- # )
+  def handle_info(:cycle, %{status: :downloading} = state) do
+    Process.send_after(self(), :cycle, 0)
+    {:noreply, state}
+  end
 
   def handle_info(msg, state) do
     Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
@@ -120,13 +116,11 @@ defmodule Peers.Worker do
   end
 
   # have
-  def process_message(4, len, %{socket: socket, peer_pieces: peer_pieces} = state) do
+  def process_message(4, len, %{socket: socket} = state) do
     with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Piece index: #{inspect(piece_index)}")
 
-      request_piece(piece_index)
-
-      {:ok, %{state | peer_pieces: MapSet.put(peer_pieces, piece_index)}}
+      request_piece(piece_index, state)
     end
   end
 
@@ -144,7 +138,6 @@ defmodule Peers.Worker do
       Logger.debug("=== Block obtained: #{inspect(block)}")
 
       PieceManager.store_block(index, begin, block)
-
       {:ok, state}
     end
   end
@@ -158,7 +151,7 @@ defmodule Peers.Worker do
     |> :binary.bin_to_list()
     |> Enum.with_index()
     |> Enum.flat_map(fn {byte, byte_index} -> bits(byte, byte_index, total_pieces) end)
-    |> MapSet.new()
+    |> :queue.from_list()
   end
 
   # pick a bit, apply a mask
@@ -178,7 +171,18 @@ defmodule Peers.Worker do
   # -------------------
   #    Pieces request
   # -------------------
-  def request_piece(piece_index) do
+  def request_piece(piece_index, state) do
+    # check with indexes are missing, request them in order
+    parent = self()
+
+    Task.start(fn ->
+      case Downloader.piece_request(piece_index, parent) do
+        :ok -> send(parent, {:success_download, piece_index})
+        :error -> send(parent, {:error_download, piece_index})
+      end
+    end)
+
+    {:ok, %{state | status: :downloading}}
   end
 
   # -----------------------------------
