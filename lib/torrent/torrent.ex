@@ -4,7 +4,7 @@ defmodule Exorrent.Torrent do
 
   require Logger
 
-  defstruct [:info_hash, :size, :trackers, :total_pieces, :piece_length, :pieces_map]
+  defstruct [:info_hash, :size, :trackers, :total_pieces, :piece_length, :pieces_list, :blocks]
 
   def read_torrent(torrent) do
     with {:ok, bencode} <- File.read(torrent),
@@ -12,7 +12,7 @@ defmodule Exorrent.Torrent do
          {:ok, info_hash} <- get_info_hash(torr),
          {:ok, trackers} <- get_trackers(torr),
          {:ok, piece_length} <- piece_length(torr),
-         {:ok, pieces_map} <- get_pieces_map(torr),
+         {:ok, pieces_list} <- get_pieces_list(torr),
          size <- size(torr) do
       {:ok,
        %__MODULE__{
@@ -21,7 +21,8 @@ defmodule Exorrent.Torrent do
          trackers: trackers,
          total_pieces: amount_pieces(torr),
          piece_length: piece_length,
-         pieces_map: pieces_map
+         pieces_list: pieces_list,
+         blocks: blocks(piece_length)
        }}
     else
       error ->
@@ -32,6 +33,9 @@ defmodule Exorrent.Torrent do
   def amount_pieces(%{"info" => info}),
     do: div(byte_size(info["pieces"]), 20)
 
+  def blocks(piece_length),
+    do: div(piece_length, 16384)
+
   # ------------------
 
   def piece_length(%{"info" => info}),
@@ -39,11 +43,10 @@ defmodule Exorrent.Torrent do
 
   # -----------------
 
-  def get_pieces_map(%{"info" => info}) do
+  def get_pieces_list(%{"info" => info}) do
     {:ok,
-     pieces_hashes(info["pieces"])
-     |> Enum.map(fn p -> {p, false} end)
-     |> Enum.reduce(%{}, fn {p, v}, acc -> Map.put(acc, p, v) end)}
+     info["pieces"]
+     |> pieces_hashes()}
   end
 
   def pieces_hashes(<<>>),

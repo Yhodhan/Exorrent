@@ -1,5 +1,6 @@
 defmodule Peers.Worker do
   alias Peers.Messages
+  alias Peers.PieceManager
 
   use GenServer
   import Bitwise
@@ -57,7 +58,7 @@ defmodule Peers.Worker do
         :cycle,
         %{socket: socket, status: :idle, interested: true} = state
       ) do
-     Logger.info("=== Worker Cycle")
+    Logger.info("=== Worker Cycle")
 
     with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
          {:ok, id, len} <- peer_message(len, socket),
@@ -69,6 +70,11 @@ defmodule Peers.Worker do
         handle_error(error, state, socket)
     end
   end
+
+ # def handle_info(
+ #   :cycle,
+ #   %{}
+ # )
 
   def handle_info(msg, state) do
     Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
@@ -116,15 +122,13 @@ defmodule Peers.Worker do
   # have
   def process_message(4, len, %{socket: socket, peer_pieces: peer_pieces} = state) do
     with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
-      Logger.info("=== Piece obtained: #{inspect(piece_index)}")
+      Logger.info("=== Piece index: #{inspect(piece_index)}")
+
+      request_piece(piece_index)
 
       {:ok, %{state | peer_pieces: MapSet.put(peer_pieces, piece_index)}}
     end
   end
-
-  # -----------------
-  #    Bitfield
-  # -----------------
 
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
@@ -132,6 +136,22 @@ defmodule Peers.Worker do
       {:ok, %{state | bitfield: make_bitfield(bitfield, total_pieces)}}
     end
   end
+
+  def process_message(7, len, %{socket: socket} = state) do
+    with {:ok, <<index::32>>} <- :gen_tcp.recv(socket, 4),
+         {:ok, <<begin::32>>} <- :gen_tcp.recv(socket, 4),
+         {:ok, <<block::binary>>} <- :gen_tcp.recv(socket, len - 8) do
+      Logger.debug("=== Block obtained: #{inspect(block)}")
+
+      PieceManager.store_block(index, begin, block)
+
+      {:ok, state}
+    end
+  end
+
+  # -----------------
+  #    Bitfield
+  # -----------------
 
   defp make_bitfield(bitfield, total_pieces) do
     bitfield
@@ -153,6 +173,12 @@ defmodule Peers.Worker do
   defp has_piece?(byte, bit_index) do
     mask = 1 <<< (7 - bit_index)
     (byte &&& mask) != 0
+  end
+
+  # -------------------
+  #    Pieces request
+  # -------------------
+  def request_piece(piece_index) do
   end
 
   # -----------------------------------

@@ -79,7 +79,6 @@ defmodule Peers.PeerConnection do
       bitfield: %MapSet{},
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
-      pieces_map: torrent.pieces_map
     }
   end
 end
