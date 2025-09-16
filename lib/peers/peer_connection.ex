@@ -76,10 +76,10 @@ defmodule Peers.PeerConnection do
       choke: true,
       unchoked: false,
       interested: false,
-      bitfield: :queue.new(),
+      bitfield: nil,
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
-      got_bitfield: false
+      requested: nil
     }
   end
 end

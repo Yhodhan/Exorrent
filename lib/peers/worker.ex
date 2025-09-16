@@ -1,15 +1,13 @@
 defmodule Peers.Worker do
   alias Peers.DownloadTable
-  alias Peers.Downloader
   alias Peers.Messages
   alias Peers.PieceManager
 
-  use Task
   use GenServer
-  import Bitwise
 
   require Logger
 
+  @block_size 16384
   # -------------------
   #   GenServer calls
   # -------------------
@@ -43,9 +41,10 @@ defmodule Peers.Worker do
         %{socket: socket, status: :idle, choke: true, interested: false} = state
       ) do
     Logger.info("=== Send interest message")
-    interes = Messages.interested()
 
+    interes = Messages.interested()
     :gen_tcp.send(socket, interes)
+
     Process.send_after(self(), :cycle, 1)
 
     {:noreply, %{state | interested: true}}
@@ -56,7 +55,53 @@ defmodule Peers.Worker do
         %{socket: socket, status: :idle, interested: true} = state
       ) do
     # Logger.info("=== Worker Cycle")
+    receive_message(socket, state)
+  end
 
+  def handle_info(:cycle, %{status: :idle, interested: true, bitfield: bitfield} = state)
+      when not is_nil(bitfield) do
+    # start requesting
+
+    {:ok, state} =
+      :queue.get(bitfield)
+      |> prepare_request(state)
+
+    Process.send_after(self(), :cycle, 10)
+
+    {:noreply, state}
+  end
+
+  def handle_info(
+        :cycle,
+        %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
+      ) do
+    # download piece
+    block_index = :queue.get(blocks_list)
+    request_msg = Messages.request(piece_index, block_index, @block_size)
+
+    :gen_tcp.send(socket, request_msg)
+
+    {:continue, :downloading, state}
+  end
+
+  def handle_info(msg, state) do
+    Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
+    Process.sleep(2000)
+    {:noreply, state}
+  end
+
+  def handle_continue(
+        :downloading,
+        %{socket: socket, requested: {piece_index, block_list}} = state
+      ) do
+    receive_message(socket, state)
+  end
+
+  # -------------------
+  #  Private functions
+  # -------------------
+
+  def receive_message(socket, state) do
     with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
          {:ok, id, len} <- peer_message(len, socket),
          {:ok, new_state} <- process_message(id, len, state) do
@@ -68,44 +113,6 @@ defmodule Peers.Worker do
     end
   end
 
-  def handle_info(:cycle, %{status: :idle, interested: true, got_bitfield: true} = state) do
-    # start requesting
-    queue = state.bitfield
-
-    {:ok, state} =
-      :queue.get(queue)
-      |> request_piece(state)
-
-    {:noreply, state}
-  end
-
-  def handle_info(:cycle, %{status: :downloading, bitfield: bitfield} = state) do
-    receive do
-      {:success_donwload, piece_index} ->
-        mark_as_done(piece_index)
-        bitfield = :queue.drop(bitfield)
-
-        Process.send_after(self(), :cycle, 0)
-        {:noreply, %{state | status: :idle, bitfield: bitfield}}
-
-      {:error_download, _piece_index} ->
-        Process.send_after(self(), :cycle, 0)
-        {:noreply, %{state | status: :idle}}
-    after
-      1000 ->
-        {:noreply, %{state | status: :downloading}}
-    end
-  end
-
-  def handle_info(msg, state) do
-    Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
-    Process.sleep(2000)
-    {:noreply, state}
-  end
-
-  # -------------------
-  #  Private functions
-  # -------------------
   def peer_message(0, _socket),
     do: :keep_alive
 
@@ -144,14 +151,18 @@ defmodule Peers.Worker do
     with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Piece index: #{inspect(piece_index)}")
 
-      request_piece(piece_index, state)
+      {:ok, state} = prepare_request(piece_index, state)
+
+      {:noreply, state}
     end
   end
 
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Bitfield obtained: #{inspect(bitfield)}")
-      {:ok, %{state | bitfield: make_bitfield(bitfield, total_pieces), got_bitfield: true}}
+
+      {:ok,
+       %{state | bitfield: Messages.make_bitfield(bitfield, total_pieces), got_bitfield: true}}
     end
   end
 
@@ -166,48 +177,13 @@ defmodule Peers.Worker do
     end
   end
 
-  # -----------------
-  #    Bitfield
-  # -----------------
-
-  defp make_bitfield(bitfield, total_pieces) do
-    bitfield
-    |> :binary.bin_to_list()
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {byte, byte_index} -> bits(byte, byte_index, total_pieces) end)
-    |> :queue.from_list()
-  end
-
-  # pick a bit, apply a mask
-  defp bits(byte, byte_index, total_pieces) do
-    for bit_index <- 0..7,
-        has_piece?(byte, bit_index),
-        piece = byte_index * 8 + bit_index,
-        piece < total_pieces,
-        do: piece
-  end
-
-  defp has_piece?(byte, bit_index) do
-    mask = 1 <<< (7 - bit_index)
-    (byte &&& mask) != 0
-  end
-
   # -------------------
   #    Pieces request
   # -------------------
-  def request_piece(piece_index, state) do
-    # check with indexes are missing, request them in order
-    parent = self()
+  def prepare_request(piece_index, state) do
+    blocks_list = PieceManager.blocks_list(piece_index)
 
-    # NOTE: this logic cannot happen as the task do not own the socket
-    Task.start(fn ->
-      case Downloader.request_piece(piece_index, parent) do
-        :ok -> send(parent, {:success_download, piece_index})
-        :error -> send(parent, {:error_download, piece_index})
-      end
-    end)
-
-    {:ok, %{state | status: :downloading}}
+    {:ok, %{state | status: :downloading, requested: {piece_index, blocks_list}}}
   end
 
   defp mark_as_done(piece_index) do

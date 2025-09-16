@@ -1,6 +1,8 @@
 defmodule Peers.Messages do
   alias Peers.Peer
 
+  import Bitwise
+
   @pstr "BitTorrent protocol"
 
   # ----------------------
@@ -116,4 +118,32 @@ defmodule Peers.Messages do
 
   def port(listen_port),
     do: <<3::32, 9::8, listen_port::binary>>
+
+
+  # -----------------
+  #    Bitfield
+  # -----------------
+
+  def make_bitfield(bitfield, total_pieces) do
+    bitfield
+    |> :binary.bin_to_list()
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {byte, byte_index} -> bits(byte, byte_index, total_pieces) end)
+    |> :queue.from_list()
+  end
+
+  # pick a bit, apply a mask
+  defp bits(byte, byte_index, total_pieces) do
+    for bit_index <- 0..7,
+        has_piece?(byte, bit_index),
+        piece = byte_index * 8 + bit_index,
+        piece < total_pieces,
+        do: piece
+  end
+
+  defp has_piece?(byte, bit_index) do
+    mask = 1 <<< (7 - bit_index)
+    (byte &&& mask) != 0
+  end
+
 end

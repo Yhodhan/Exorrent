@@ -21,6 +21,9 @@ defmodule Peers.PieceManager do
   def pieces_map(),
     do: GenServer.call(__MODULE__, :pieces)
 
+  def blocks_list(piece_index),
+    do: GenServer.call(__MODULE__, {:blocks_list, piece_index})
+
   # ----------------------
   #   GenServer functions
   # ----------------------
@@ -54,6 +57,16 @@ defmodule Peers.PieceManager do
 
   def handle_call(:pieces, _from, piece_map),
     do: {:reply, piece_map, piece_map}
+
+  def blocks_list({:blocks_list, piece_index}, piece_map) do
+    block_map =
+      piece_map
+      |> Map.get(piece_index)
+      |> Map.keys()
+      |> :queue.from_list()
+
+    {:reply, block_map, piece_map}
+  end
 
   # -------------------
   #  Private functions
