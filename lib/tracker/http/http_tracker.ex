@@ -1,19 +1,21 @@
 defmodule Tracker.HttpTracker do
-  alias Exorrent.Decoder
+  alias Bencoder.Decoder
+  alias Peers.Peer
+  alias Peers.Messages
 
   require Logger
 
   def send_request(url, torrent) do
-    url = http_connection_req(torrent, url)
+    url = Messages.http_connection_req(torrent, url)
 
     :inets.start()
     :ssl.start()
 
-    case http_message(url) do
-      {:ok, data} ->
-        encode_peers(data)
-
-      {:error, _reason} ->
+    with {:ok, data} <- http_message(url),
+         {:ok, answer} <- decode_answer(data) do
+      Peer.peers_addresses(answer)
+    else
+      _ ->
         []
     end
   end
@@ -32,40 +34,9 @@ defmodule Tracker.HttpTracker do
     end
   end
 
-  # ------------------
-  # Private functions
-  # ------------------
+  defp decode_answer(data) when is_binary(data),
+    do: Decoder.decode(data)
 
-  defp http_connection_req(torrent, uri, port \\ 6881) do
-    params = %{
-      "info_hash" => torrent.info_hash,
-      "peer_id" => :crypto.strong_rand_bytes(20),
-      "port" => port,
-      "uploaded" => 0,
-      "downloaded" => 0,
-      "left" => torrent.size,
-      "compact" => 1,
-      "event" => "started"
-    }
-
-    query = URI.encode_query(params)
-    "#{uri.scheme}://#{uri.authority}#{uri.path}?#{query}"
-  end
-
-  defp encode_peers(%{"peers" => peer}) when is_binary(peer) do
-    <<a, b, c, d, port::16>> = peer
-    [{{a, b, c, d}, port}]
-  end
-
-  defp encode_peers(%{"peers" => peers}),
-    do: Enum.map(peers, fn p -> encode_peer(p) end)
-
-  defp encode_peer(%{"ip" => ip, "port" => port}) do
-    {:ok, ip} =
-      ip
-      |> String.to_charlist()
-      |> :inet.parse_address()
-
-    {ip, port}
-  end
+  defp decode_answer(data),
+      do: {:ok, data}
 end

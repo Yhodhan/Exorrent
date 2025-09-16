@@ -1,4 +1,4 @@
-defmodule Exorrent.Decoder do
+defmodule Bencoder.Decoder do
   @moduledoc """
   Documentation for `Decoder`.
   """
@@ -78,7 +78,7 @@ defmodule Exorrent.Decoder do
   # ----------------------
   #   Private functions
   # ----------------------
-  def split_until(bencode, char) do
+  defp split_until(bencode, char) do
     case :binary.split(bencode, <<char>>) do
       [head, tail] -> {head, tail}
     end

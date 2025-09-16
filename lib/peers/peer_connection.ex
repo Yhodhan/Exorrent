@@ -1,148 +1,85 @@
-defmodule Exorrent.PeerConnection do
-  alias Exorrent.Peer
+defmodule Peers.PeerConnection do
+  alias Peers.Worker
 
-  use GenServer
   require Logger
 
   @pstr "BitTorrent protocol"
 
-  # -------------------
-  #   GenServer calls
-  # -------------------
+  def peer_connect(peer) do
+    {ip, port} = peer
 
-  # initial states:
-  #  %Peer{ip, port, status, socket}
-  def start_link(%Peer{} = peer),
-    do: GenServer.start_link(__MODULE__, peer)
-
-  def peer_connect(pid),
-    do: GenServer.cast(pid, :connect)
-
-  def peer_health(pid),
-    do: GenServer.call(pid, :status)
-
-  def send_handshake(pid, msg),
-    do: GenServer.cast(pid, {:send_tcp, msg})
-
-  def handshake_response(pid),
-    do: GenServer.call(pid, :handshake_response)
-
-  def complete_handshake(pid),
-    do: GenServer.cast(pid, :complete_handshake)
-
-  def terminate_connection(pid),
-    do: GenServer.cast(pid, :terminate)
-
-  # ----------------------
-  #   GenServer functions
-  # ----------------------
-  def init(peer) do
-    Registry.register(:peer_registry, {:peer, peer.ip, peer.port}, peer)
-    {:ok, peer}
-  end
-
-  def handle_cast(:terminate, state) do
-    :gen_tcp.close(state.socket)
-    {:stop, :normal, state}
-  end
-
-  def handle_cast(:connect, state) do
-    %Peer{ip: ip, port: port} = state
-
-    case :gen_tcp.connect(ip, port, [:binary, packet: :raw, active: false]) do
+    case :gen_tcp.connect(ip, port, [:binary, packet: :raw, active: false], 2000) do
       {:ok, socket} ->
         Logger.info("=== Succesfull connection #{inspect(ip)}:#{port}")
-
-        {:noreply, update_state(state, :connected, socket)}
+        {:ok, socket}
 
       {:error, reason} ->
         Logger.error("=== Failed to connect #{inspect(ip)}:#{port} reason=#{inspect(reason)}")
-        #        Logger.flush()
-        {:noreply, update_state(state, :not_connected, nil)}
+        {:error, reason}
     end
   end
 
-  def handle_cast({:send_tcp, msg}, state) do
-    %Peer{socket: socket} = state
-
+  def send_handshake(socket, msg) do
     Logger.info("=== Sending msg to socket: #{inspect(socket)}")
 
     :gen_tcp.send(socket, msg)
-
-    {:noreply, state}
   end
 
-  def handle_cast(:complete_handshake, state) do
-    Logger.debug("=== Completing handshake")
-    socket = state.socket
-
-    case :gen_tcp.recv(socket, 20) do
-      {:ok, _peer_id} ->
-        :gen_tcp.controlling_process(socket, self())
-
-      _ ->
-        :gen_tcp.close(socket)
-    end
-
-    {:noreply, state}
-  end
-
-  def handle_call(:handshake_response, _from, state) do
-    Logger.info("Reading data from socket: #{inspect(state.socket)}")
-    socket = state.socket
+  def handshake_response(socket, info_hash) do
+    Logger.info("Reading data from socket: #{inspect(socket)}")
 
     with {:ok, <<len::8>>} <- :gen_tcp.recv(socket, 1),
          {:ok, pstr} <- :gen_tcp.recv(socket, len),
          {:ok, _reserved} <- :gen_tcp.recv(socket, 8),
-         {:ok, info_hash} <- :gen_tcp.recv(socket, 20) do
-      cond do
-        @pstr === pstr -> {:reply, {:ok, info_hash}, state}
-        true -> {:reply, :error, state}
+         {:ok, hash} <- :gen_tcp.recv(socket, 20) do
+      case {pstr, hash} do
+        {@pstr, ^info_hash} -> :ok
+        _ -> :error
       end
     end
   end
 
-  def handle_call(:peer_status, _from, state),
-    do: {:reply, state, state}
+  def complete_handshake(socket, torrent) do
+    Logger.info("=== Completing handshake")
 
-  # ---------------------
-  #     Name helper
-  # ---------------------
+    case :gen_tcp.recv(socket, 20) do
+      {:ok, peer_id} ->
+        peer_state = peer_state(socket, peer_id, torrent)
 
-  defp update_state(state, conn, socket) do
-    peer = state
-    %{peer | status: conn, socket: socket, pid: self()}
-  end
+        {:ok, worker_pid} = Worker.start_link(peer_state)
+        :gen_tcp.controlling_process(socket, worker_pid)
 
-  # --------------------
-  #     Connection
-  # --------------------
+        {:ok, worker_pid}
 
-  def build_handshake(torrent) do
-    pstrlen = byte_size(@pstr)
-    reserved = <<0::64>>
-    info_hash = torrent.info_hash
-    peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
-
-    <<pstrlen::8, @pstr::binary, reserved::binary, info_hash::binary-size(20), peer_id::binary>>
-  end
-
-  def parse_tcp_response(msg) do
-    case msg do
-      <<0::32, _id::8, _>> ->
-        :keep_alive
-
-      <<1::32, 0::8, _>> ->
-        :choke
-
-      <<0::32, 1::8, _>> ->
-        :unchoke
-
-      <<1::32, 2::8, _>> ->
-        :interested
-
-      <<1::32, 3::8, _>> ->
-        :not_interested
+      _ ->
+        :error
     end
+  end
+
+  def terminate_connection(socket) do
+    Logger.info("=== Terminating connection to socket: #{inspect(socket)}")
+    :gen_tcp.close(socket)
+  end
+
+  # ---------------------
+  #       Helper
+  # ---------------------
+
+  # for the Worker GenServer
+  defp peer_state(socket, peer_id, torrent) do
+    %{
+      socket: socket,
+      info_hash: torrent.info_hash,
+      size: torrent.size,
+      peer_id: peer_id,
+      status: :idle,
+      choke: true,
+      unchoked: false,
+      interested: false,
+      bitfield: nil,
+      total_pieces: torrent.total_pieces,
+      piece_length: torrent.piece_length,
+      requested: nil
+    }
   end
 end

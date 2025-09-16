@@ -1,76 +1,91 @@
 defmodule Exorrent do
   alias Exorrent.Torrent
   alias Exorrent.Tracker
-  alias Exorrent.PeerManager
-  alias Exorrent.PeerConnection
+  alias Peers.PeerConnection
+  alias Peers.Messages
+  alias Peers.Worker
+  alias Peers.DownloadTable
+  alias Peers.PieceManager
 
   require Logger
 
-  @torrent "ubuntu.torrent"
+  @torrent "torrents/obs.torrent"
 
   def init() do
+    Process.flag(:trap_exit, true)
+
     {:ok, torrent} = Torrent.read_torrent(@torrent)
 
     peers = Tracker.get_peers(torrent)
-    # init swarm of peers
-    PeerManager.start_link(peers)
 
     Logger.info("=== Peers found init connection")
-    connection(torrent)
-  end
 
-  def connection(torrent) do
-    broadcast()
+    case connection(torrent, peers) do
+      {:error, _} ->
+        Logger.error("=== Failed download")
 
-    [peer | _] = get_connected_peers()
-
-    Logger.info("=== Init of handhshake")
-    {:ok, info_hash} = init_handshake(torrent, peer)
-
-    if info_hash != torrent.info_hash do
-      Logger.info("=== Received answer does not match info hash")
-      PeerConnection.terminate_connection(peer.pid)
-    else
-      Logger.info("=== Received answer match info hash")
-      PeerConnection.complete_handshake(peer.pid)
+      {:ok, worker_pid} ->
+        Logger.info("=== Download in progress")
+        worker_pid
     end
   end
 
-  def init_handshake(torrent, peer) do
-    # Enum.map(peers, fn peer ->
-    handshake = PeerConnection.build_handshake(torrent)
+  def connection(_torrent, []),
+    do: {:error, :no_peers}
 
-    PeerConnection.send_handshake(peer.pid, handshake)
+  def connection(torrent, peers) do
+    [peer | rest] = peers
+    Logger.debug("Attemp connection, peer: #{inspect(peer)}")
 
-    PeerConnection.handshake_response(peer.pid)
-    # end)
+    with {:ok, socket} <- PeerConnection.peer_connect(peer),
+         {:ok, worker_pid} <- handshake(socket, torrent) do
+      # ---------------------
+      #  Create pieces table
+      # ---------------------
+      DownloadTable.create_table()
+      DownloadTable.fill_table(torrent.pieces_list, torrent.piece_length)
+
+      # ------------------
+      #  Piece manager
+      # ------------------
+      {:ok, _pid} = PieceManager.start_link(torrent)
+
+      # ---------------------
+      #     Init downlaod
+      # ---------------------
+      Worker.init_cycle(worker_pid)
+      {:ok, worker_pid}
+    else
+      _ ->
+        connection(torrent, rest)
+    end
+  end
+
+  def handshake(socket, torrent) do
+    Logger.info("=== Init of handhshake")
+    handshake = Messages.build_handshake(torrent.info_hash)
+
+    with :ok <- PeerConnection.send_handshake(socket, handshake),
+         :ok <- PeerConnection.handshake_response(socket, torrent.info_hash),
+         {:ok, worker_pid} <- PeerConnection.complete_handshake(socket, torrent) do
+      {:ok, worker_pid}
+    else
+      error ->
+        Logger.error("=== Handshake error reason: #{inspect(error)}")
+        PeerConnection.terminate_connection(socket)
+    end
   end
 
   # -------------------
   #       helpers
   # -------------------
 
-  def broadcast(),
-    do: PeerManager.broadcast()
-
-  def check_peers_status(),
-    do: PeerManager.check_peers_connections()
-
-  def get_peers(),
-    do: PeerManager.get_peers()
-
-  def get_connected_peers(),
-    do: PeerManager.get_connected_peers()
-
-  def terminate_unconnected_peers(),
-    do: PeerManager.terminate_unconnected_peers()
-
-  def reconnect() do
-    PeerManager.kill()
-    init()
+  def raw_torrent() do
+    {:ok, raw_data} = File.read(@torrent)
+    {:ok, torr} = Bencoder.Decoder.decode(raw_data)
+    torr
   end
 
-  # helper
   def torrent() do
     {:ok, torrent} = Torrent.read_torrent(@torrent)
     torrent
