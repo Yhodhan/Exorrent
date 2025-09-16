@@ -58,7 +58,7 @@ defmodule Peers.PieceManager do
   def handle_call(:pieces, _from, piece_map),
     do: {:reply, piece_map, piece_map}
 
-  def blocks_list({:blocks_list, piece_index}, piece_map) do
+  def handle_call({:blocks_list, piece_index}, _from, piece_map) do
     block_map =
       piece_map
       |> Map.get(piece_index)

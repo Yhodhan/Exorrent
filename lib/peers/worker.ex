@@ -1,5 +1,5 @@
 defmodule Peers.Worker do
-  alias Peers.DownloadTable
+  # alias Peers.DownloadTable
   alias Peers.Messages
   alias Peers.PieceManager
 
@@ -50,17 +50,16 @@ defmodule Peers.Worker do
     {:noreply, %{state | interested: true}}
   end
 
-  def handle_info(
-        :cycle,
-        %{socket: socket, status: :idle, interested: true} = state
-      ) do
-    # Logger.info("=== Worker Cycle")
-    receive_message(socket, state)
-  end
-
   def handle_info(:cycle, %{status: :idle, interested: true, bitfield: bitfield} = state)
       when not is_nil(bitfield) do
     # start requesting
+    Logger.debug("=== Bitfield obtained, init request")
+
+    Logger.debug("=== Bitfield: #{inspect(bitfield)}")
+
+    piece_in = :queue.get(bitfield)
+
+    Logger.debug("=== Dequeue piece: #{inspect(piece_in)}")
 
     {:ok, state} =
       :queue.get(bitfield)
@@ -71,12 +70,33 @@ defmodule Peers.Worker do
     {:noreply, state}
   end
 
+  def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
+    Logger.info("=== Worker Cycle")
+
+    case receive_message(socket, state) do
+      {:downloading, state} ->
+        {:continue, state}
+
+      {:ok, state} ->
+        Process.send_after(self(), :cycle, 10)
+        {:noreply, state}
+
+      {:stop, state} ->
+        {:stop, :normal, state}
+    end
+  end
+
   def handle_info(
         :cycle,
         %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
       ) do
     # download piece
     block_index = :queue.get(blocks_list)
+
+    Logger.debug(
+      "parameters to querest, ind: #{inspect(piece_index)}, block: #{inspect(block_index)}, size: #{inspect(@block_size)}"
+    )
+
     request_msg = Messages.request(piece_index, block_index, @block_size)
 
     :gen_tcp.send(socket, request_msg)
@@ -94,7 +114,15 @@ defmodule Peers.Worker do
         :downloading,
         %{socket: socket, requested: {piece_index, block_list}} = state
       ) do
-    receive_message(socket, state)
+    case receive_message(socket, state) do
+      {:downloading, state} ->
+        {:continue, state}
+
+      {:ok, state} ->
+        Process.send_after(self(), :cycle, 10)
+
+        {:noreply, state}
+    end
   end
 
   # -------------------
@@ -103,10 +131,9 @@ defmodule Peers.Worker do
 
   def receive_message(socket, state) do
     with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
-         {:ok, id, len} <- peer_message(len, socket),
-         {:ok, new_state} <- process_message(id, len, state) do
-      Process.send_after(self(), :cycle, 10)
-      {:noreply, new_state}
+         {:ok, id, len} <- peer_message(len, socket) do
+      Logger.debug("=== Process message")
+      process_message(id, len, state)
     else
       error ->
         handle_error(error, state, socket)
@@ -153,7 +180,7 @@ defmodule Peers.Worker do
 
       {:ok, state} = prepare_request(piece_index, state)
 
-      {:noreply, state}
+      {:downloading, state}
     end
   end
 
@@ -161,8 +188,7 @@ defmodule Peers.Worker do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Bitfield obtained: #{inspect(bitfield)}")
 
-      {:ok,
-       %{state | bitfield: Messages.make_bitfield(bitfield, total_pieces), got_bitfield: true}}
+      {:ok, %{state | bitfield: Messages.make_bitfield(bitfield, total_pieces)}}
     end
   end
 
@@ -173,7 +199,8 @@ defmodule Peers.Worker do
       Logger.debug("=== Block obtained: #{inspect(block)}")
 
       PieceManager.store_block(index, begin, block)
-      {:ok, state}
+
+      {:downloading, state}
     end
   end
 
@@ -181,14 +208,15 @@ defmodule Peers.Worker do
   #    Pieces request
   # -------------------
   def prepare_request(piece_index, state) do
+    Logger.debug("=== preparing request piece_index: #{inspect(piece_index)}")
     blocks_list = PieceManager.blocks_list(piece_index)
 
     {:ok, %{state | status: :downloading, requested: {piece_index, blocks_list}}}
   end
 
-  defp mark_as_done(piece_index) do
-    DownloadTable.mark_as_done(piece_index)
-  end
+  #  defp mark_as_done(piece_index) do
+  #    DownloadTable.mark_as_done(piece_index)
+  #  end
 
   # -----------------------------------
   #     Handle keep alive and errors
@@ -200,16 +228,16 @@ defmodule Peers.Worker do
         Logger.error("=== Connection alive")
         send_alive(socket)
         Process.send_after(self(), :cycle, 0)
-        {:noreply, state}
+        {:ok, state}
 
       {:error, :timeout} ->
         Process.send_after(self(), :cycle, 100)
-        {:noreply, state}
+        {:ok, state}
 
       {:error, :closed} ->
         Logger.error("=== Coneccion closed in worker: #{inspect(self())}")
         :gen_tcp.close(socket)
-        {:stop, :normal, state}
+        {:stop, state}
     end
   end
 

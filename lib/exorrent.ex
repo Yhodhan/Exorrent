@@ -12,6 +12,8 @@ defmodule Exorrent do
   @torrent "torrents/obs.torrent"
 
   def init() do
+    Process.flag(:trap_exit, true)
+
     {:ok, torrent} = Torrent.read_torrent(@torrent)
 
     peers = Tracker.get_peers(torrent)

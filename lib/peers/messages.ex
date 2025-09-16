@@ -106,7 +106,7 @@ defmodule Peers.Messages do
     do: <<5::32, 4::8, piece_index::binary>>
 
   def request(index, begin, len),
-    do: <<13::32, 6::8, index::binary, begin::binary, len::binary>>
+    do: <<13::32, 6::8, index::32, begin::32, len::32>>
 
   def piece(block_len, index, begin, block) do
     len = 9 + block_len
@@ -118,7 +118,6 @@ defmodule Peers.Messages do
 
   def port(listen_port),
     do: <<3::32, 9::8, listen_port::binary>>
-
 
   # -----------------
   #    Bitfield
@@ -145,5 +144,4 @@ defmodule Peers.Messages do
     mask = 1 <<< (7 - bit_index)
     (byte &&& mask) != 0
   end
-
 end
