@@ -1,5 +1,6 @@
 defmodule Peers.Worker do
   # alias Peers.DownloadTable
+  alias Peers.DownloadTable
   alias Peers.Messages
   alias Peers.PieceManager
 
@@ -33,8 +34,12 @@ defmodule Peers.Worker do
     {:ok, state}
   end
 
+  # --------------------------------------------------
+
   def handle_call(:bitfield, _from, state),
     do: {:reply, state.bitfield, state}
+
+  # --------------------------------------------------
 
   def handle_info(
         :cycle,
@@ -49,6 +54,8 @@ defmodule Peers.Worker do
 
     {:noreply, %{state | interested: true}}
   end
+
+  # --------------------------------------------------
 
   def handle_info(:cycle, %{status: :idle, interested: true, bitfield: bitfield} = state)
       when not is_nil(bitfield) do
@@ -70,39 +77,45 @@ defmodule Peers.Worker do
     {:noreply, state}
   end
 
+  # --------------------------------------------------
+
   def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
     Logger.info("=== Worker Cycle")
 
-    case receive_message(socket, state) do
-      {:downloading, state} ->
-        {:continue, state}
-
-      {:ok, state} ->
-        Process.send_after(self(), :cycle, 10)
-        {:noreply, state}
-
-      {:stop, state} ->
-        {:stop, :normal, state}
-    end
+    receive_message(socket, state)
   end
+
+  # --------------------------------------------------
 
   def handle_info(
         :cycle,
         %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
       ) do
     # download piece
-    block_index = :queue.get(blocks_list)
+    unless :queue.is_empty(blocks_list) do
+      block_index = :queue.get(blocks_list)
 
-    Logger.debug(
-      "parameters to querest, ind: #{inspect(piece_index)}, block: #{inspect(block_index)}, size: #{inspect(@block_size)}"
-    )
+      Logger.debug(
+        "parameters to request, piece_index: #{inspect(piece_index)}, block_index: #{inspect(block_index)}"
+      )
 
-    request_msg = Messages.request(piece_index, block_index, @block_size)
+      request_msg = Messages.request(piece_index, block_index, @block_size)
 
-    :gen_tcp.send(socket, request_msg)
+      :gen_tcp.send(socket, request_msg)
 
-    {:continue, :downloading, state}
+      {:noreply, state, {:continue, :downloading}}
+    else
+      DownloadTable.mark_as_done(piece_index)
+
+      {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
+
+      Process.send_after(self(), :cycle, 1)
+
+      {:noreply, %{state | status: :idle, bitfield: bitfield}}
+    end
   end
+
+  # --------------------------------------------------
 
   def handle_info(msg, state) do
     Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)}")
@@ -110,19 +123,12 @@ defmodule Peers.Worker do
     {:noreply, state}
   end
 
-  def handle_continue(
-        :downloading,
-        %{socket: socket, requested: {piece_index, block_list}} = state
-      ) do
-    case receive_message(socket, state) do
-      {:downloading, state} ->
-        {:continue, state}
+  # --------------------------------------------------
 
-      {:ok, state} ->
-        Process.send_after(self(), :cycle, 10)
+  def handle_continue(:downloading, %{socket: socket} = state) do
+    Logger.debug("=== Enter handle continue")
 
-        {:noreply, state}
-    end
+    receive_message(socket, state) |> IO.inspect(label: "received message")
   end
 
   # -------------------
@@ -133,9 +139,23 @@ defmodule Peers.Worker do
     with {:ok, <<len::32>>} <- :gen_tcp.recv(socket, 4, 100),
          {:ok, id, len} <- peer_message(len, socket) do
       Logger.debug("=== Process message")
-      process_message(id, len, state)
+
+      case process_message(id, len, state) do
+        {:block_obtained, state} ->
+          Process.send_after(self(), :cycle, 10)
+          {:noreply, state}
+
+        {:downloading, state} ->
+          {:noreply, state, {:continue, :downloading}}
+
+        {:ok, state} ->
+          Process.send_after(self(), :cycle, 10)
+
+          {:noreply, state}
+      end
     else
       error ->
+        IO.inspect(error, label: "entered handle error")
         handle_error(error, state, socket)
     end
   end
@@ -192,7 +212,7 @@ defmodule Peers.Worker do
     end
   end
 
-  def process_message(7, len, %{socket: socket} = state) do
+  def process_message(7, len, %{socket: socket, requested: {piece_index, block_list}} = state) do
     with {:ok, <<index::32>>} <- :gen_tcp.recv(socket, 4),
          {:ok, <<begin::32>>} <- :gen_tcp.recv(socket, 4),
          {:ok, <<block::binary>>} <- :gen_tcp.recv(socket, len - 8) do
@@ -200,7 +220,9 @@ defmodule Peers.Worker do
 
       PieceManager.store_block(index, begin, block)
 
-      {:downloading, state}
+      {{:value, _block_index}, block_list} = :queue.out(block_list)
+
+      {:block_obtained, %{state | requested: {piece_index, block_list}}}
     end
   end
 
@@ -228,11 +250,11 @@ defmodule Peers.Worker do
         Logger.error("=== Connection alive")
         send_alive(socket)
         Process.send_after(self(), :cycle, 0)
-        {:ok, state}
+        {:noreply, state}
 
       {:error, :timeout} ->
         Process.send_after(self(), :cycle, 100)
-        {:ok, state}
+        {:noreply, state}
 
       {:error, :closed} ->
         Logger.error("=== Coneccion closed in worker: #{inspect(self())}")

@@ -1,4 +1,6 @@
 defmodule Peers.DownloadTable do
+  require Logger
+
   # ---------------
   #     Schema
   # ---------------
@@ -17,6 +19,7 @@ defmodule Peers.DownloadTable do
   end
 
   def mark_as_done(piece_index) do
+    Logger.info("=== Piece downloaded: #{inspect(piece_index)}")
     :ets.update_element(:piece_table, piece_index, {2, :complete})
   end
 end
