@@ -24,6 +24,9 @@ defmodule Peers.PieceManager do
   def blocks_list(piece_index),
     do: GenServer.call(__MODULE__, {:blocks_list, piece_index})
 
+  def blocks(piece_map),
+    do: GenServer.call(__MODULE__, {:blocks, piece_index})
+
   # ----------------------
   #   GenServer functions
   # ----------------------
@@ -68,6 +71,16 @@ defmodule Peers.PieceManager do
     {:reply, block_map, piece_map}
   end
 
+  def handle_call({:blocks, piece_index}, _from, piece_map) do
+    blocks =
+      piece_map
+      |> Map.get(piece_index)
+      |> Map.values()
+      |> Enum.reverse()
+
+    {:reply, blocks, piece_map}
+  end
+
   # -------------------
   #  Private functions
   # -------------------
@@ -75,7 +88,8 @@ defmodule Peers.PieceManager do
     num_blocks =
       if piece_index == total_pieces - 1 do
         # last piece, maybe smaller
-        size - (total_pieces - 1) * piece_length
+        (size - (total_pieces - 1) * piece_length)
+        |> div(16384)
       else
         blocks
       end

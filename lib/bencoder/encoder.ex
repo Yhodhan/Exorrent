@@ -9,14 +9,14 @@ defmodule Bencoder.Encoder do
   def encode_data(data) when is_map(data),
     do: encode_map(data)
 
-  def encode_data(data) when is_integer(data),
-    do: encode_integer(data)
-
   def encode_data(data) when is_list(data),
     do: encode_list(data)
 
   def encode_data(data) when is_binary(data),
     do: encode_bin(data)
+
+  def encode_data(data) when is_integer(data),
+    do: encode_integer(data)
 
   def encode_map(map) do
     keys = Map.keys(map)

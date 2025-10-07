@@ -50,6 +50,12 @@ defmodule Exorrent do
       # ------------------
       {:ok, _pid} = PieceManager.start_link(torrent)
 
+      # ------------------
+      #  disk manager
+      # ------------------
+
+      {:ok, _pid} = DiskManager.start_link(torrent)
+      
       # ---------------------
       #     Init downlaod
       # ---------------------

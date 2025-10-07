@@ -1,5 +1,6 @@
 defmodule Peers.Worker do
   # alias Peers.DownloadTable
+  alias GenLSP.Structures.DidCloseNotebookDocumentParams
   alias Peers.DownloadTable
   alias Peers.Messages
   alias Peers.PieceManager
@@ -64,17 +65,26 @@ defmodule Peers.Worker do
 
     Logger.debug("=== Bitfield: #{inspect(bitfield)}")
 
-    piece_in = :queue.get(bitfield)
+    # do some logic to handle file writting here
+    unless :queue.is_empty(bitfield) do
+      # piece_in = :queue.get(bitfield)
 
-    Logger.debug("=== Dequeue piece: #{inspect(piece_in)}")
+      # Logger.debug("=== Dequeue piece: #{inspect(piece_in)}")
 
-    {:ok, state} =
-      :queue.get(bitfield)
-      |> prepare_request(state)
+      {:ok, state} =
+        :queue.get(bitfield)
+        |> prepare_request(state)
 
-    Process.send_after(self(), :cycle, 10)
+      Process.send_after(self(), :cycle, 10)
 
-    {:noreply, state}
+      {:noreply, state}
+    else
+      # done downloading
+      Logger.info("=== Finish requesting pieces")
+      Logger.info("=== Close socket connection")
+
+      :gen_tcp.close(state.socket)
+    end
   end
 
   # --------------------------------------------------
@@ -105,14 +115,30 @@ defmodule Peers.Worker do
 
       {:noreply, state, {:continue, :downloading}}
     else
-      DownloadTable.mark_as_done(piece_index)
+      case valid_piece?(piece_index) do
+        {true, verified_piece} ->
+          DownloadTable.mark_as_done(piece_index)
 
-      {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
+          # init write to disk
+          DiskManager.write_piece(piece_index, verified_piece)
 
-      Process.send_after(self(), :cycle, 1)
+          {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
 
-      {:noreply, %{state | status: :idle, bitfield: bitfield}}
+          Process.send_after(self(), :cycle, 1)
+
+          {:noreply, %{state | status: :idle, bitfield: bitfield}}
+
+        _ ->
+          # retry download
+          {:noreply, %{state | status: :idle, interested: true}}
+      end
     end
+  end
+
+  def valid_piece?(piece_index) do
+    block_list = PieceManager.blocks(piece_index)
+
+    {true, piece}
   end
 
   # --------------------------------------------------
@@ -128,7 +154,8 @@ defmodule Peers.Worker do
   def handle_continue(:downloading, %{socket: socket} = state) do
     Logger.debug("=== Enter handle continue")
 
-    receive_message(socket, state) |> IO.inspect(label: "received message")
+    receive_message(socket, state)
+    |> IO.inspect(label: "received message")
   end
 
   # -------------------
@@ -259,7 +286,7 @@ defmodule Peers.Worker do
       {:error, :closed} ->
         Logger.error("=== Coneccion closed in worker: #{inspect(self())}")
         :gen_tcp.close(socket)
-        {:stop, state}
+        {:stop, :closed, state}
     end
   end
 
