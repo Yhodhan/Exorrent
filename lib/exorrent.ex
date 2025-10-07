@@ -43,6 +43,7 @@ defmodule Exorrent do
       #  Create pieces table
       # ---------------------
       DownloadTable.create_table()
+
       DownloadTable.fill_table(torrent.pieces_list, torrent.piece_length)
 
       # ------------------
@@ -53,7 +54,6 @@ defmodule Exorrent do
       # ------------------
       #  disk manager
       # ------------------
-
       {:ok, _pid} = DiskManager.start_link(torrent)
       
       # ---------------------

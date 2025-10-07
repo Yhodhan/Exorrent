@@ -1,6 +1,5 @@
 defmodule Peers.Worker do
   # alias Peers.DownloadTable
-  alias GenLSP.Structures.DidCloseNotebookDocumentParams
   alias Peers.DownloadTable
   alias Peers.Messages
   alias Peers.PieceManager
@@ -115,30 +114,27 @@ defmodule Peers.Worker do
 
       {:noreply, state, {:continue, :downloading}}
     else
-      case valid_piece?(piece_index) do
-        {true, verified_piece} ->
+      case validate_piece(piece_index, state.pieces_list) do
+        {:ok, verified_piece} ->
           DownloadTable.mark_as_done(piece_index)
 
-          # init write to disk
+          # Init write to disk
           DiskManager.write_piece(piece_index, verified_piece)
 
+          # Fetch next bitfield index
           {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
 
+          # Keep cycle
           Process.send_after(self(), :cycle, 1)
 
           {:noreply, %{state | status: :idle, bitfield: bitfield}}
 
         _ ->
+          Logger.error("=== Piece could not be verified, retry download")
           # retry download
           {:noreply, %{state | status: :idle, interested: true}}
       end
     end
-  end
-
-  def valid_piece?(piece_index) do
-    block_list = PieceManager.blocks(piece_index)
-
-    {true, piece}
   end
 
   # --------------------------------------------------
@@ -253,9 +249,10 @@ defmodule Peers.Worker do
     end
   end
 
-  # -------------------
-  #    Pieces request
-  # -------------------
+  # ----------------------------
+  #   Pieces request and build
+  # ----------------------------
+
   def prepare_request(piece_index, state) do
     Logger.debug("=== preparing request piece_index: #{inspect(piece_index)}")
     blocks_list = PieceManager.blocks_list(piece_index)
@@ -263,9 +260,21 @@ defmodule Peers.Worker do
     {:ok, %{state | status: :downloading, requested: {piece_index, blocks_list}}}
   end
 
-  #  defp mark_as_done(piece_index) do
-  #    DownloadTable.mark_as_done(piece_index)
-  #  end
+  def validate_piece(piece_index, pieces_list) do
+    blocks = PieceManager.blocks(piece_index)
+
+    piece = unify_blocks(blocks)
+
+    if MapSet.member?(pieces_list, piece),
+      do: {:ok, piece},
+      else: {:error, piece}
+  end
+
+  def unify_blocks([]), do: <<>>
+
+  def unify_blocks([block | rest]) do
+    block <> unify_blocks(rest)
+  end
 
   # -----------------------------------
   #     Handle keep alive and errors

@@ -79,7 +79,8 @@ defmodule Peers.PeerConnection do
       bitfield: nil,
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
-      requested: nil
+      requested: nil,
+      pieces_list: torrent.pieces_list
     }
   end
 end

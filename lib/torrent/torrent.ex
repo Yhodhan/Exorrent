@@ -4,7 +4,16 @@ defmodule Exorrent.Torrent do
 
   require Logger
 
-  defstruct [:info_hash, :size, :trackers, :total_pieces, :piece_length, :pieces_list, :blocks]
+  defstruct [
+    :name,
+    :info_hash,
+    :size,
+    :trackers,
+    :total_pieces,
+    :piece_length,
+    :pieces_list,
+    :blocks
+  ]
 
   def read_torrent(torrent) do
     with {:ok, bencode} <- File.read(torrent),
@@ -16,12 +25,13 @@ defmodule Exorrent.Torrent do
          size <- size(torr) do
       {:ok,
        %__MODULE__{
+         name: get_name(torr),
          info_hash: info_hash,
          size: size,
          trackers: trackers,
          total_pieces: amount_pieces(torr),
          piece_length: piece_length,
-         pieces_list: pieces_list,
+         pieces_list: MapSet.new(pieces_list),
          blocks: blocks(piece_length)
        }}
     else
@@ -29,6 +39,9 @@ defmodule Exorrent.Torrent do
         Logger.error("=== failed creating #{inspect(error)}")
     end
   end
+
+  def get_name(%{"info" => info}),
+    do: info["name"]
 
   def amount_pieces(%{"info" => info}),
     do: div(byte_size(info["pieces"]), 20)

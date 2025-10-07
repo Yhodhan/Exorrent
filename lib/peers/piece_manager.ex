@@ -24,7 +24,7 @@ defmodule Peers.PieceManager do
   def blocks_list(piece_index),
     do: GenServer.call(__MODULE__, {:blocks_list, piece_index})
 
-  def blocks(piece_map),
+  def blocks(piece_index),
     do: GenServer.call(__MODULE__, {:blocks, piece_index})
 
   # ----------------------
