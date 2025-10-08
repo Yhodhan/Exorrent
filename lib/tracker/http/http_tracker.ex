@@ -8,6 +8,8 @@ defmodule Tracker.HttpTracker do
   def send_request(url, torrent) do
     url = Messages.http_connection_req(torrent, url)
 
+    IO.inspect(url, label: "Tracker url")
+
     :inets.start()
     :ssl.start()
 
@@ -38,5 +40,5 @@ defmodule Tracker.HttpTracker do
     do: Decoder.decode(data)
 
   defp decode_answer(data),
-      do: {:ok, data}
+    do: {:ok, data}
 end

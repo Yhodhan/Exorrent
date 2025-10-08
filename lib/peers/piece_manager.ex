@@ -62,9 +62,12 @@ defmodule Peers.PieceManager do
     do: {:reply, piece_map, piece_map}
 
   def handle_call({:blocks_list, piece_index}, _from, piece_map) do
+    index = parse_index(piece_index)
+
+    IO.inspect(index, label: "parsed index")
     block_map =
       piece_map
-      |> Map.get(piece_index)
+      |> Map.get(index)
       |> Map.keys()
       |> :queue.from_list()
 
@@ -72,9 +75,13 @@ defmodule Peers.PieceManager do
   end
 
   def handle_call({:blocks, piece_index}, _from, piece_map) do
+    index = parse_index(piece_index)
+
+    IO.inspect(index, label: "parsed index")
+
     blocks =
       piece_map
-      |> Map.get(piece_index)
+      |> Map.get(index)
       |> Map.values()
       |> Enum.reverse()
 
@@ -98,4 +105,12 @@ defmodule Peers.PieceManager do
       {block_index, nil}
     end
   end
+
+  defp parse_index(piece_index) when is_binary(piece_index) do
+    <<val::32>> = piece_index
+    val
+  end
+
+  defp parse_index(piece_index),
+    do: piece_index
 end

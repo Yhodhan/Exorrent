@@ -91,6 +91,7 @@ defmodule Peers.Worker do
   def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
     Logger.info("=== Worker Cycle")
 
+#    Process.sleep(10000)
     receive_message(socket, state)
   end
 
@@ -105,11 +106,13 @@ defmodule Peers.Worker do
       block_index = :queue.get(blocks_list)
 
       Logger.debug(
-        "parameters to request, piece_index: #{inspect(piece_index)}, block_index: #{inspect(block_index)}"
+        "parameters to request, piece_index: #{inspect(piece_index)}, block_index: #{inspect(block_index * @block_size)}"
       )
 
-      request_msg = Messages.request(piece_index, block_index, @block_size)
+      request_msg = Messages.request(piece_index, block_index * @block_size, @block_size)
 
+      IO.inspect(request_msg, label: "Requeste msg being sent")
+      
       :gen_tcp.send(socket, request_msg)
 
       {:noreply, state, {:continue, :downloading}}
@@ -151,7 +154,7 @@ defmodule Peers.Worker do
     Logger.debug("=== Enter handle continue")
 
     receive_message(socket, state)
-    |> IO.inspect(label: "received message")
+    # |> IO.inspect(label: "received message")
   end
 
   # -------------------
@@ -178,7 +181,6 @@ defmodule Peers.Worker do
       end
     else
       error ->
-        IO.inspect(error, label: "entered handle error")
         handle_error(error, state, socket)
     end
   end
@@ -241,6 +243,9 @@ defmodule Peers.Worker do
          {:ok, <<block::binary>>} <- :gen_tcp.recv(socket, len - 8) do
       Logger.debug("=== Block obtained: #{inspect(block)}")
 
+      IO.inspect(len, label: "Len of the block")
+      IO.inspect(index, label: "index block")
+      IO.inspect(begin, label: "Begin block index")
       PieceManager.store_block(index, begin, block)
 
       {{:value, _block_index}, block_list} = :queue.out(block_list)
@@ -263,7 +268,9 @@ defmodule Peers.Worker do
   def validate_piece(piece_index, pieces_list) do
     blocks = PieceManager.blocks(piece_index)
 
+    IO.inspect(blocks, label: "blocks piece")
     piece = unify_blocks(blocks)
+    IO.inspect(piece, label: "unified piece")
 
     if MapSet.member?(pieces_list, piece),
       do: {:ok, piece},
@@ -289,6 +296,7 @@ defmodule Peers.Worker do
         {:noreply, state}
 
       {:error, :timeout} ->
+        Logger.debug("=== Reponse timeout, retry")
         Process.send_after(self(), :cycle, 100)
         {:noreply, state}
 

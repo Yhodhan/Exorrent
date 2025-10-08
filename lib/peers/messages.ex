@@ -14,19 +14,39 @@ defmodule Peers.Messages do
     <<byte_size(@pstr)::8, @pstr::bytes, 0::64, info_hash::binary-size(20), peer_id::binary>>
   end
 
-  def http_connection_req(torrent, uri, port \\ 6881) do
-    params = %{
-      "info_hash" => torrent.info_hash,
-      "peer_id" => :crypto.strong_rand_bytes(20),
-      "port" => port,
-      "uploaded" => 0,
-      "downloaded" => 0,
-      "left" => torrent.size,
-      "compact" => 1,
-      "event" => "started"
-    }
+  def url_encode_raw(binary) do
+    binary
+    |> :binary.bin_to_list()
+    |> Enum.map(fn byte ->
+      cond do
+        byte in ?0..?9 or byte in ?A..?Z or byte in ?a..?z or byte in ~c'-_.~' ->
+          <<byte>>
 
-    query = URI.encode_query(params)
+        true ->
+          "%" <> Base.encode16(<<byte>>, case: :upper)
+      end
+    end)
+    |> Enum.join()
+  end
+
+  def http_connection_req(torrent, uri, port \\ 6881) do
+    peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
+    encoded_peer_id = url_encode_raw(peer_id)
+    encoded_info_hash = url_encode_raw(torrent.info_hash)
+
+    query =
+      [
+        "info_hash=#{encoded_info_hash}",
+        "peer_id=#{encoded_peer_id}",
+        "port=#{port}",
+        "uploaded=0",
+        "downloaded=0",
+        "left=#{torrent.size}",
+        "compact=1",
+        "event=started"
+      ]
+      |> Enum.join("&")
+
     "#{uri.scheme}://#{uri.authority}#{uri.path}?#{query}"
   end
 
@@ -105,8 +125,8 @@ defmodule Peers.Messages do
   def have(piece_index),
     do: <<5::32, 4::8, piece_index::binary>>
 
-  def request(index, begin, len),
-    do: <<13::32, 6::8, index::32, begin::32, len::32>>
+  def request(piece_index, begin, len),
+    do: <<13::32, 6::8, piece_index::32, begin::32, len::32>>
 
   def piece(block_len, index, begin, block) do
     len = 9 + block_len

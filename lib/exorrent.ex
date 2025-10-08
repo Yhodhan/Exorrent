@@ -9,7 +9,7 @@ defmodule Exorrent do
 
   require Logger
 
-  @torrent "torrents/obs.torrent"
+  @torrent "torrents/bunny.torrent"
 
   def init() do
     Process.flag(:trap_exit, true)
