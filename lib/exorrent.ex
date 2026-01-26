@@ -9,7 +9,7 @@ defmodule Exorrent do
 
   require Logger
 
-  @torrent "torrents/bunny.torrent"
+  @torrent "torrents/ubuntu.torrent"
 
   def init() do
     Process.flag(:trap_exit, true)
@@ -47,19 +47,20 @@ defmodule Exorrent do
       DownloadTable.fill_table(torrent.pieces_list, torrent.piece_length)
 
       # ------------------
-      #  Piece manager
+      #    Piece manager
       # ------------------
       {:ok, _pid} = PieceManager.start_link(torrent)
 
       # ------------------
-      #  disk manager
+      #    Disk manager
       # ------------------
       {:ok, _pid} = DiskManager.start_link(torrent)
-      
+
       # ---------------------
       #     Init downlaod
       # ---------------------
       Worker.init_cycle(worker_pid)
+
       {:ok, worker_pid}
     else
       _ ->
@@ -83,7 +84,7 @@ defmodule Exorrent do
   end
 
   # -------------------
-  #       helpers
+  #       Helpers
   # -------------------
 
   def raw_torrent() do

@@ -8,6 +8,7 @@ defmodule Peers.PieceManager do
     Manager of pieces
   """
 
+  @block_size 16384
   # -------------------
   #   GenServer calls
   # -------------------
@@ -26,6 +27,9 @@ defmodule Peers.PieceManager do
 
   def blocks(piece_index),
     do: GenServer.call(__MODULE__, {:blocks, piece_index})
+
+  def is_done?(piece_index),
+    do: GenServer.call(__MODULE__, {:is_done?, piece_index})
 
   # ----------------------
   #   GenServer functions
@@ -50,10 +54,11 @@ defmodule Peers.PieceManager do
   end
 
   def handle_cast({:store_block, index, begin, block}, piece_map) do
+    round_index = Integer.floor_div(begin, @block_size)
     # store block in the memory
     block_map =
       Map.get(piece_map, index)
-      |> Map.put(begin, block)
+      |> Map.put(round_index, block)
 
     {:noreply, Map.put(piece_map, index, block_map)}
   end
@@ -64,7 +69,6 @@ defmodule Peers.PieceManager do
   def handle_call({:blocks_list, piece_index}, _from, piece_map) do
     index = parse_index(piece_index)
 
-    IO.inspect(index, label: "parsed index")
     block_map =
       piece_map
       |> Map.get(index)
@@ -77,15 +81,24 @@ defmodule Peers.PieceManager do
   def handle_call({:blocks, piece_index}, _from, piece_map) do
     index = parse_index(piece_index)
 
-    IO.inspect(index, label: "parsed index")
-
     blocks =
       piece_map
       |> Map.get(index)
       |> Map.values()
-      |> Enum.reverse()
 
     {:reply, blocks, piece_map}
+  end
+
+  # return true if there is a missing block
+  def handle_call({:is_done?, piece_index}, _from, piece_map) do
+    index = parse_index(piece_index)
+
+    done? =
+      piece_map
+      |> Map.get(index)
+      |> Enum.any?(fn b -> is_nil(b) end)
+
+    {:reply, done?, piece_map}
   end
 
   # -------------------

@@ -91,7 +91,7 @@ defmodule Peers.Worker do
   def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
     Logger.info("=== Worker Cycle")
 
-#    Process.sleep(10000)
+    #    Process.sleep(10000)
     receive_message(socket, state)
   end
 
@@ -102,41 +102,40 @@ defmodule Peers.Worker do
         %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
       ) do
     # download piece
-    unless :queue.is_empty(blocks_list) do
-      block_index = :queue.get(blocks_list)
+    cond do
+      not :queue.is_empty(blocks_list) ->
+        block_index = :queue.get(blocks_list)
 
-      Logger.debug(
-        "parameters to request, piece_index: #{inspect(piece_index)}, block_index: #{inspect(block_index * @block_size)}"
-      )
+        Logger.info(
+          "parameters to request, piece_index: #{inspect(piece_index)}, block_index: #{inspect(block_index)}, block_offset: #{inspect(block_index * @block_size)}"
+        )
 
-      request_msg = Messages.request(piece_index, block_index * @block_size, @block_size)
+        request_msg = Messages.request(piece_index, block_index * @block_size, @block_size)
+        :gen_tcp.send(socket, request_msg)
 
-      IO.inspect(request_msg, label: "Requeste msg being sent")
-      
-      :gen_tcp.send(socket, request_msg)
+        {:noreply, state, {:continue, :downloading}}
 
-      {:noreply, state, {:continue, :downloading}}
-    else
-      case validate_piece(piece_index, state.pieces_list) do
-        {:ok, verified_piece} ->
-          DownloadTable.mark_as_done(piece_index)
+      true ->
+        case validate_piece(piece_index, state.pieces_list) do
+          {:ok, verified_piece} ->
+            DownloadTable.mark_as_done(piece_index)
 
-          # Init write to disk
-          DiskManager.write_piece(piece_index, verified_piece)
+            # Init write to disk
+            DiskManager.write_piece(piece_index, verified_piece)
 
-          # Fetch next bitfield index
-          {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
+            # Fetch next bitfield index
+            {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
 
-          # Keep cycle
-          Process.send_after(self(), :cycle, 1)
+            # Keep cycle
+            Process.send_after(self(), :cycle, 1)
 
-          {:noreply, %{state | status: :idle, bitfield: bitfield}}
+            {:noreply, %{state | status: :idle, bitfield: bitfield}}
 
-        _ ->
-          Logger.error("=== Piece could not be verified, retry download")
-          # retry download
-          {:noreply, %{state | status: :idle, interested: true}}
-      end
+          _ ->
+            Logger.error("=== Piece could not be verified, retry download")
+            # retry download
+            {:noreply, %{state | status: :idle, interested: true}}
+        end
     end
   end
 
@@ -154,7 +153,6 @@ defmodule Peers.Worker do
     Logger.debug("=== Enter handle continue")
 
     receive_message(socket, state)
-    # |> IO.inspect(label: "received message")
   end
 
   # -------------------
@@ -189,9 +187,8 @@ defmodule Peers.Worker do
     do: :keep_alive
 
   def peer_message(len, socket) do
-    with {:ok, <<id::8>>} <- :gen_tcp.recv(socket, 1, 100) do
-      {:ok, id, len - 1}
-    end
+    with {:ok, <<id::8>>} <- :gen_tcp.recv(socket, 1, 100),
+         do: {:ok, id, len - 1}
   end
 
   # choke
@@ -223,7 +220,8 @@ defmodule Peers.Worker do
     with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Piece index: #{inspect(piece_index)}")
 
-      {:ok, state} = prepare_request(piece_index, state)
+      <<index::32>> = piece_index
+      {:ok, state} = prepare_request(index, state)
 
       {:downloading, state}
     end
@@ -231,7 +229,8 @@ defmodule Peers.Worker do
 
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
-      Logger.info("=== Bitfield obtained: #{inspect(bitfield)}")
+      Logger.info("=== Bitfield obtained ")
+      # #{inspect(bitfield)}")
 
       {:ok, %{state | bitfield: Messages.make_bitfield(bitfield, total_pieces)}}
     end
@@ -245,12 +244,18 @@ defmodule Peers.Worker do
 
       IO.inspect(len, label: "Len of the block")
       IO.inspect(index, label: "index block")
-      IO.inspect(begin, label: "Begin block index")
+      IO.inspect(Integer.floor_div(begin, @block_size), label: "Begin block index")
+
+      floor_index = Integer.floor_div(begin, @block_size)
+
       PieceManager.store_block(index, begin, block)
 
-      {{:value, _block_index}, block_list} = :queue.out(block_list)
+      {{:value, block_index}, remain_blocks} = :queue.out(block_list)
 
-      {:block_obtained, %{state | requested: {piece_index, block_list}}}
+      # verificates that the obtained block isnt repeated
+      if floor_index != block_index,
+        do: {:block_obtained, %{state | requested: {piece_index, block_list}}},
+        else: {:block_obtained, %{state | requested: {piece_index, remain_blocks}}}
     end
   end
 
@@ -266,22 +271,23 @@ defmodule Peers.Worker do
   end
 
   def validate_piece(piece_index, pieces_list) do
-    blocks = PieceManager.blocks(piece_index)
+    blocks =
+      piece_index
+      |> PieceManager.blocks()
 
-    IO.inspect(blocks, label: "blocks piece")
     piece = unify_blocks(blocks)
-    IO.inspect(piece, label: "unified piece")
+    hash = :crypto.hash(:sha, piece)
 
-    if MapSet.member?(pieces_list, piece),
+    if MapSet.member?(pieces_list, hash),
       do: {:ok, piece},
       else: {:error, piece}
   end
 
-  def unify_blocks([]), do: <<>>
+  def unify_blocks([]),
+    do: <<>>
 
-  def unify_blocks([block | rest]) do
-    block <> unify_blocks(rest)
-  end
+  def unify_blocks([block | rest]),
+    do: block <> unify_blocks(rest)
 
   # -----------------------------------
   #     Handle keep alive and errors
