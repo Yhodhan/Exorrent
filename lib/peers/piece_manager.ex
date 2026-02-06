@@ -89,16 +89,12 @@ defmodule Peers.PieceManager do
     {:reply, blocks, piece_map}
   end
 
-  # return true if there is a missing block
   def handle_call({:is_done?, piece_index}, _from, piece_map) do
     index = parse_index(piece_index)
 
-    done? =
-      piece_map
-      |> Map.get(index)
-      |> Enum.any?(fn b -> is_nil(b) end)
-
-    {:reply, done?, piece_map}
+    if missing_block?(piece_map, index),
+      do: {:reply, false, piece_map},
+      else: {:reply, true, piece_map}
   end
 
   # -------------------
@@ -126,4 +122,10 @@ defmodule Peers.PieceManager do
 
   defp parse_index(piece_index),
     do: piece_index
+
+  def missing_block?(piece_map, index) do
+    piece_map
+    |> Map.get(index)
+    |> Enum.any?(fn b -> is_nil(b) end)
+  end
 end

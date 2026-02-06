@@ -61,15 +61,9 @@ defmodule Peers.Worker do
       when not is_nil(bitfield) do
     # start requesting
     Logger.debug("=== Bitfield obtained, init request")
-
     Logger.debug("=== Bitfield: #{inspect(bitfield)}")
 
-    # do some logic to handle file writting here
     unless :queue.is_empty(bitfield) do
-      # piece_in = :queue.get(bitfield)
-
-      # Logger.debug("=== Dequeue piece: #{inspect(piece_in)}")
-
       {:ok, state} =
         :queue.get(bitfield)
         |> prepare_request(state)
@@ -118,18 +112,20 @@ defmodule Peers.Worker do
       true ->
         case validate_piece(piece_index, state.pieces_list) do
           {:ok, verified_piece} ->
-            DownloadTable.mark_as_done(piece_index)
-
             # Init write to disk
             DiskManager.write_piece(piece_index, verified_piece)
 
-            # Fetch next bitfield index
-            {{:value, _piece_index}, bitfield} = :queue.out(state.bitfield)
-
             # Keep cycle
-            Process.send_after(self(), :cycle, 1)
+            # Fetch next bitfield index
+            if not is_nil(state.bitfield) do
+              {{:value, _piece_index}, dequee_bitfield} = :queue.out(state.bitfield)
 
-            {:noreply, %{state | status: :idle, bitfield: bitfield}}
+              Process.send_after(self(), :cycle, 1)
+              {:noreply, %{state | status: :idle, bitfield: dequee_bitfield}}
+            else
+              Process.send_after(self(), :cycle, 1)
+              {:noreply, %{state | status: :idle}}
+            end
 
           _ ->
             Logger.error("=== Piece could not be verified, retry download")
