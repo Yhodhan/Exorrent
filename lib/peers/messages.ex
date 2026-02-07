@@ -148,7 +148,7 @@ defmodule Peers.Messages do
     |> :binary.bin_to_list()
     |> Enum.with_index()
     |> Enum.flat_map(fn {byte, byte_index} -> bits(byte, byte_index, total_pieces) end)
-    |> :queue.from_list()
+    |> MapSet.new()
   end
 
   # pick a bit, apply a mask

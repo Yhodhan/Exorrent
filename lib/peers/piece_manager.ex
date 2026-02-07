@@ -89,6 +89,7 @@ defmodule Peers.PieceManager do
     {:reply, blocks, piece_map}
   end
 
+  # Tells when a piece is fully donwload
   def handle_call({:is_done?, piece_index}, _from, piece_map) do
     index = parse_index(piece_index)
 

@@ -1,11 +1,9 @@
 defmodule Peers.Worker do
-  # alias Peers.DownloadTable
-  alias Peers.DownloadTable
   alias Peers.Messages
   alias Peers.PieceManager
+  alias Peers.PeerManager
 
   use GenServer
-
   require Logger
 
   @block_size 16384
@@ -23,13 +21,12 @@ defmodule Peers.Worker do
     do: send(pid, :cycle)
 
   def bitfield_map(pid),
-    do: GenServer.call(pid, :bitfield)
-
-  # ----------------------
-  #   GenServer functions
-  # ----------------------
-
-  def init(state) do
+    # ----------------------
+    #   GenServer functions
+    # --------------------
+    do:
+      GenServer.call(pid, :bitfield) --
+        def(init(state)) do
     Process.flag(:trap_exit, true)
     {:ok, state}
   end
@@ -117,14 +114,13 @@ defmodule Peers.Worker do
 
             # Keep cycle
             # Fetch next bitfield index
-            if not is_nil(state.bitfield) do
-              {{:value, _piece_index}, dequee_bitfield} = :queue.out(state.bitfield)
+            case PeerManager.request_work(self()) do
+              :none ->
+                {:noreply, %{state | status: :idle, interested: true}}
 
-              Process.send_after(self(), :cycle, 1)
-              {:noreply, %{state | status: :idle, bitfield: dequee_bitfield}}
-            else
-              Process.send_after(self(), :cycle, 1)
-              {:noreply, %{state | status: :idle}}
+              piece ->
+                {:ok, state} = prepare_request(piece, state)
+                {:noreply, state}
             end
 
           _ ->
@@ -226,9 +222,11 @@ defmodule Peers.Worker do
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Bitfield obtained ")
-      # #{inspect(bitfield)}")
 
-      {:ok, %{state | bitfield: Messages.make_bitfield(bitfield, total_pieces)}}
+      bitmap = Messages.make_bitfield(bitfield, total_pieces)
+      PeerManager.store_bitfield(bitmap)
+
+      {:ok, state}
     end
   end
 
