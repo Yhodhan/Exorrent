@@ -9,14 +9,15 @@ defmodule Peers.PeerManager do
   def start_link({peers, pieces}),
     do: GenServer.start_link(__MODULE__, {peers, pieces}, name: __MODULE__)
 
-  # store the received bitmap from a worker
+  # Store the received bitmap from a worker
   def store_bitfield(pid, bitmap),
     do: GenServer.cast(__MODULE__, {:store_bitfield, pid, bitmap})
 
-  # store the received piece from a have message of a worker
-  def store_piece(pid, piece),
-    do: GenServer.cast(__MODULE__, {:store_piece, pid, piece})
+  # Store the received index from a have message
+  def store_index(pid, index),
+    do: GenServer.cast(__MODULE__, {:store_index, pid, index})
 
+  # Worker request a new piece to download from the ones available to him.
   def request_work(pid),
     do: GenServer.call(__MODULE__, {:request_work, pid})
 
@@ -25,7 +26,7 @@ defmodule Peers.PeerManager do
   # ----------------------
 
   def init({peers, pieces}) do
-    # build map of peers
+    # Build map of peers
     peers_map =
       for pid <- peers, into: %{} do
         {pid, MapSet.new()}
@@ -43,17 +44,17 @@ defmodule Peers.PeerManager do
       |> MapSet.union(bitmap)
 
     peers_map = Map.put(peers_map, pid, merged_sets)
-    {:noreply, peers_map}
+    {:noreply, %{state | peers_map: peers_map}}
   end
 
-  def handle_cast({:store_piece, pid, piece}, %{peers_map: peers_map} = state) do
+  def handle_cast({:store_index, pid, index}, %{peers_map: peers_map} = state) do
     pieces_set =
       peers_map
       |> Map.get(pid)
-      |> MapSet.put(piece)
+      |> MapSet.put(index)
 
     peers_map = Map.put(peers_map, pid, pieces_set)
-    {:noreply, peers_map}
+    {:noreply, %{state | peers_map: peers_map}}
   end
 
   def handle_call({:request_work, pid}, _from, state) do

@@ -1,4 +1,6 @@
 defmodule Peers.PeerConnection do
+
+
   alias Peers.Worker
 
   require Logger
@@ -76,7 +78,7 @@ defmodule Peers.PeerConnection do
       choke: true,
       unchoked: false,
       interested: false,
-      bitfield: nil,
+      bitfield: false,
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
       requested: nil,
