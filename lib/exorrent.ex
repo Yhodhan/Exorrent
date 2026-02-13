@@ -16,26 +16,22 @@ defmodule Exorrent do
 
     {:ok, torrent} = Torrent.read_torrent(@torrent)
 
-    peers = Tracker.get_peers(torrent)
+    with {:ok, peers} <- Tracker.get_peers(torrent) do
+      Logger.info("=== Peers found init connection ===")
 
-    Logger.info("=== Peers found init connection")
+      {:ok, worker_pid} = connection(torrent, peers)
 
-    case connection(torrent, peers) do
+      Logger.info("=== Download in progress ===")
+      worker_pid
+    else
       {:error, _} ->
-        Logger.error("=== Failed download")
-
-      {:ok, worker_pid} ->
-        Logger.info("=== Download in progress")
-        worker_pid
+        Logger.error("=== No peers found, stop download ===")
     end
   end
 
-  def connection(_torrent, []),
-    do: {:error, :no_peers}
-
   def connection(torrent, peers) do
     [peer | rest] = peers
-    Logger.debug("Attemp connection, peer: #{inspect(peer)}")
+    Logger.debug("=== Attemp connection, peer: #{inspect(peer)} ===")
 
     with {:ok, socket} <- PeerConnection.peer_connect(peer),
          {:ok, worker_pid} <- handshake(socket, torrent) do
@@ -69,7 +65,7 @@ defmodule Exorrent do
   end
 
   def handshake(socket, torrent) do
-    Logger.info("=== Init of handhshake")
+    Logger.info("=== Init of handhshake ===")
     handshake = Messages.build_handshake(torrent.info_hash)
 
     with :ok <- PeerConnection.send_handshake(socket, handshake),
@@ -78,7 +74,7 @@ defmodule Exorrent do
       {:ok, worker_pid}
     else
       error ->
-        Logger.error("=== Handshake error reason: #{inspect(error)}")
+        Logger.error("=== Handshake error reason: #{inspect(error)} ===")
         PeerConnection.terminate_connection(socket)
     end
   end

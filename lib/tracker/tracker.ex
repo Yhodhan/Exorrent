@@ -5,9 +5,18 @@ defmodule Exorrent.Tracker do
   require Logger
 
   def get_peers(torrent) do
-    torrent.trackers
-    |> Enum.flat_map(fn tr -> request(tr, torrent) end)
-    |> Enum.uniq()
+    peers =
+      torrent.trackers
+      |> Enum.flat_map(fn tr -> request(tr, torrent) end)
+      |> Enum.uniq()
+
+    case peers do
+      [] ->
+        {:error, peers}
+
+      _ ->
+        {:ok, peers}
+    end
   end
 
   def request(tracker, torrent) do

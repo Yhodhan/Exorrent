@@ -8,8 +8,6 @@ defmodule Tracker.HttpTracker do
   def send_request(url, torrent) do
     url = Messages.http_connection_req(torrent, url)
 
-    IO.inspect(url, label: "Tracker url")
-
     :inets.start()
     :ssl.start()
 
@@ -17,7 +15,8 @@ defmodule Tracker.HttpTracker do
          {:ok, answer} <- decode_answer(data) do
       Peer.peers_addresses(answer)
     else
-      _ ->
+      {:error, reason} ->
+        Logger.error("The url #{url} failed with reason: #{reason}")
         []
     end
   end
@@ -36,9 +35,18 @@ defmodule Tracker.HttpTracker do
     end
   end
 
-  defp decode_answer(data) when is_binary(data),
-    do: Decoder.decode(data)
+  defp decode_answer(data) when is_binary(data) do
+    Decoder.decode(data)
+    |> decode_answer()
+  end
 
-  defp decode_answer(data),
-    do: {:ok, data}
+  defp decode_answer(data) do
+    case data do
+      %{"failure reason" => reason} ->
+        {:error, reason}
+
+      _ ->
+        {:ok, data}
+    end
+  end
 end
