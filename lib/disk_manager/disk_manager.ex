@@ -24,7 +24,7 @@ defmodule DiskManager do
     {:ok, fd} = File.open(torrent.name, [:raw, :read, :write, :binary])
 
     #allocate full 0s
-    :file.pwrite(fd, torrent.total_pieces - 1, <<0>>)
+    :file.pwrite(fd, torrent.size - 1, <<0>>)
 
     disk_state = %{fd: fd, piece_length: torrent.piece_length}
 

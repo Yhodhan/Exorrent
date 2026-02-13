@@ -1,6 +1,4 @@
 defmodule Peers.PeerConnection do
-
-
   alias Peers.Worker
 
   require Logger
@@ -12,23 +10,23 @@ defmodule Peers.PeerConnection do
 
     case :gen_tcp.connect(ip, port, [:binary, packet: :raw, active: false], 2000) do
       {:ok, socket} ->
-        Logger.info("=== Succesfull connection #{inspect(ip)}:#{port}")
+        Logger.info("=== Succesfull connection #{inspect(ip)}:#{port} ===")
         {:ok, socket}
 
       {:error, reason} ->
-        Logger.error("=== Failed to connect #{inspect(ip)}:#{port} reason=#{inspect(reason)}")
+        Logger.error("=== Failed to connect #{inspect(ip)}:#{port} reason=#{inspect(reason)} ===")
         {:error, reason}
     end
   end
 
   def send_handshake(socket, msg) do
-    Logger.info("=== Sending msg to socket: #{inspect(socket)}")
+    Logger.info("=== Sending msg to socket: #{inspect(socket)} ===")
 
     :gen_tcp.send(socket, msg)
   end
 
   def handshake_response(socket, info_hash) do
-    Logger.info("Reading data from socket: #{inspect(socket)}")
+    Logger.info("=== Reading data from socket: #{inspect(socket)} ===")
 
     with {:ok, <<len::8>>} <- :gen_tcp.recv(socket, 1),
          {:ok, pstr} <- :gen_tcp.recv(socket, len),
@@ -42,7 +40,7 @@ defmodule Peers.PeerConnection do
   end
 
   def complete_handshake(socket, torrent) do
-    Logger.info("=== Completing handshake")
+    Logger.info("=== Completing handshake ===")
 
     case :gen_tcp.recv(socket, 20) do
       {:ok, peer_id} ->
@@ -59,7 +57,7 @@ defmodule Peers.PeerConnection do
   end
 
   def terminate_connection(socket) do
-    Logger.info("=== Terminating connection to socket: #{inspect(socket)}")
+    Logger.info("=== Terminating connection to socket: #{inspect(socket)} ===")
     :gen_tcp.close(socket)
   end
 

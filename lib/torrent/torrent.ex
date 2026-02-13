@@ -67,7 +67,7 @@ defmodule Exorrent.Torrent do
 
   def pieces_hashes(<<hash::binary-size(20), rest::binary>>),
     do: [hash] ++ pieces_hashes(rest)
- 
+
   # -----------------
 
   def get_info_hash(%{"info" => info}) do
