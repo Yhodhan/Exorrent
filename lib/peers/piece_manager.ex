@@ -19,6 +19,9 @@ defmodule Peers.PieceManager do
   def store_block(index, begin, block),
     do: GenServer.cast(__MODULE__, {:store_block, index, begin, block})
 
+  def downloading(piece_index),
+    do: GenServer.cast(__MODULE__, {:downloading, piece_index})
+
   def pieces_map(),
     do: GenServer.call(__MODULE__, :pieces)
 
@@ -28,8 +31,8 @@ defmodule Peers.PieceManager do
   def blocks(piece_index),
     do: GenServer.call(__MODULE__, {:blocks, piece_index})
 
-  def is_done?(piece_index),
-    do: GenServer.call(__MODULE__, {:is_done?, piece_index})
+  def status(piece_index),
+    do: GenServer.call(__MODULE__, {:status, piece_index})
 
   # ----------------------
   #   GenServer functions
@@ -51,52 +54,92 @@ defmodule Peers.PieceManager do
         {piece_index, block_map}
       end
 
-    {:ok, pieces_map}
+    # create piece status
+    pieces_status =
+      pieces_map
+      |> Map.keys()
+      |> build_statuses_map()
+
+    pieces_state = %{pieces_map: pieces_map, pieces_status: pieces_status}
+
+    {:ok, pieces_state}
   end
 
-  def handle_cast({:store_block, index, begin, block}, piece_map) do
+  def handle_cast({:store_block, index, begin, block}, pieces_state) do
     round_index = Integer.floor_div(begin, @block_size)
+    pieces_map = pieces_state.pieces_map
     # store block in the memory
     block_map =
-      Map.get(piece_map, index)
+      pieces_map
+      |> Map.get(index)
       |> Map.put(round_index, block)
 
-    {:noreply, Map.put(piece_map, index, block_map)}
+    pieces_status =
+      case missing_block?(pieces_map, index) do
+        false ->
+          pieces_state.pieces_status
+          |> Map.put(index, :done)
+
+        true ->
+          pieces_state.pieces_status
+      end
+
+    pieces_map = Map.put(pieces_map, index, block_map)
+
+    pieces_state =
+      pieces_state
+      |> Map.put(:pieces_map, pieces_map)
+      |> Map.put(:pieces_status, pieces_status)
+
+    {:noreply, pieces_state}
   end
 
-  def handle_call(:pieces, _from, piece_map),
-    do: {:reply, piece_map, piece_map}
+  def handle_cast({:dowloading, piece_index}, pieces_state) do
+    index = parse_index(piece_index)
 
-  def handle_call({:blocks_list, piece_index}, _from, piece_map) do
+    pieces_status =
+      pieces_state.pieces_status
+      |> Map.put(index, :downloading)
+
+    pieces_state =
+      pieces_state
+      |> Map.put(:pieces_status, pieces_status)
+
+    {:noreply, pieces_state}
+  end
+
+  def handle_call(:pieces, _from, pieces_state),
+    do: {:reply, pieces_state.pieces_map, pieces_state}
+
+  def handle_call({:blocks_list, piece_index}, _from, pieces_state) do
     index = parse_index(piece_index)
 
     block_map =
-      piece_map
+      pieces_state.pieces_map
       |> Map.get(index)
       |> Map.keys()
       |> :queue.from_list()
 
-    {:reply, block_map, piece_map}
+    {:reply, block_map, pieces_state}
   end
 
-  def handle_call({:blocks, piece_index}, _from, piece_map) do
+  def handle_call({:blocks, piece_index}, _from, pieces_state) do
     index = parse_index(piece_index)
 
     blocks =
-      piece_map
+      pieces_state.pieces_map
       |> Map.get(index)
       |> Map.values()
 
-    {:reply, blocks, piece_map}
+    {:reply, blocks, pieces_state}
   end
 
   # Tells when a piece is fully donwload
-  def handle_call({:is_done?, piece_index}, _from, piece_map) do
+  def handle_call({:status, piece_index}, _from, pieces_state) do
     index = parse_index(piece_index)
+    status = pieces_state.pieces_status[index]
 
-    if missing_block?(piece_map, index),
-      do: {:reply, false, piece_map},
-      else: {:reply, true, piece_map}
+    {:reply, status, pieces_state}
   end
 
   # -------------------
@@ -117,6 +160,18 @@ defmodule Peers.PieceManager do
     end
   end
 
+  @doc """
+    status map can have three states
+    1 - miss
+    2 - downloading
+    3 - done
+  """
+  def build_statuses_map(indexes) do
+    indexes
+    |> Enum.map(fn index -> {index, :miss} end)
+    |> Map.new()
+  end
+
   defp parse_index(piece_index) when is_binary(piece_index) do
     <<val::32>> = piece_index
     val
@@ -125,8 +180,8 @@ defmodule Peers.PieceManager do
   defp parse_index(piece_index),
     do: piece_index
 
-  def missing_block?(piece_map, index) do
-    piece_map
+  def missing_block?(pieces_state, index) do
+    pieces_state
     |> Map.get(index)
     |> Enum.any?(fn b -> is_nil(b) end)
   end

@@ -21,7 +21,9 @@ defmodule Peers.Worker do
     do: send(pid, :cycle)
 
   def bitfield_map(pid),
-    do: GenServer.call(pid, :bitfield)# ----------------------
+    do: GenServer.call(pid, :bitfield)
+
+  # ----------------------
   #   GenServer functions
   # --------------------
 
@@ -51,13 +53,13 @@ defmodule Peers.Worker do
   def handle_info(:cycle, %{status: :idle, interested: true, bitfield: true} = state) do
     Process.send_after(self(), :cycle, 2)
 
-    case PeerManager.request_work(self()) do
-      :none ->
-        {:noreply, state}
+    with {:ok, piece} <- PeerManager.request_work(self()),
+         :miss <- PieceManager.status(piece) do
+      {:ok, state} = prepare_request(piece, state)
 
-      piece ->
-        {:ok, state} = prepare_request(piece, state)
-
+      {:noreply, state, {:continue, :downloading}}
+    else
+      _ ->
         {:noreply, state}
     end
   end
@@ -65,7 +67,7 @@ defmodule Peers.Worker do
   # --------------------------------------------------
 
   def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
-    Logger.info("=== Worker Cycle")
+    Logger.info("=== Worker Cycle ===")
 
     # Process.sleep(10000)
     receive_message(socket, state)
@@ -197,12 +199,19 @@ defmodule Peers.Worker do
       Logger.info("=== Piece index: #{inspect(piece_index)} ===")
 
       <<index::32>> = piece_index
-      {:ok, state} = prepare_request(index, state)
 
-      {:downloading, state}
+      case PieceManager.status(index) do
+        :miss ->
+          {:ok, state} = prepare_request(index, state)
+          {:downloading, state}
+
+        _ ->
+          {:ok, state}
+      end
     end
   end
 
+  # Bitfield
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       bitmap = Messages.make_bitfield(bitfield, total_pieces)
