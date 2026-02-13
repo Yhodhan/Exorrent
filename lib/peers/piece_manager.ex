@@ -41,6 +41,7 @@ defmodule Peers.PieceManager do
         piece_length: piece_length,
         size: size
       }) do
+    Logger.info("=== Init Piece Manager ===")
     # create dictionary
     # key: piece index
     # value: dicc -> key: block_index, value: block

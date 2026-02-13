@@ -16,21 +16,25 @@ defmodule Tracker.HttpTracker do
       Peer.peers_addresses(answer)
     else
       {:error, reason} ->
-        Logger.error("The url #{url} failed with reason: #{reason}")
+        Logger.error("The url #{url} failed with reason: #{reason} ===")
         []
     end
   end
 
   def http_message(url) do
-    Logger.info("=== Sending tcp message to #{url}")
+    Logger.info("=== Sending tcp message to #{url} ===")
 
     case :httpc.request(:get, {to_charlist(url), []}, [], []) do
       {:ok, {{_, 200, _}, _headers, body}} ->
-        Logger.info("=== Response received")
+        Logger.info("=== Response received ===")
         Decoder.decode(body)
 
+      {:ok, {{_, 503, reason}, _headers, _body}} ->
+        Logger.error("=== Failed to received msg: #{inspect(reason)} ===")
+        {:error, reason}
+
       {:error, reason} ->
-        Logger.error("=== Failed to received msg: #{inspect(reason)}")
+        Logger.error("=== Failed to received msg: #{inspect(reason)} ===")
         {:error, reason}
     end
   end

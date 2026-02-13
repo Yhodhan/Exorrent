@@ -4,7 +4,6 @@ defmodule Exorrent do
   alias Peers.PeerConnection
   alias Peers.Messages
   alias Peers.Worker
-  alias Peers.DownloadTable
   alias Peers.PieceManager
 
   require Logger
@@ -35,26 +34,23 @@ defmodule Exorrent do
 
     with {:ok, socket} <- PeerConnection.peer_connect(peer),
          {:ok, worker_pid} <- handshake(socket, torrent) do
-      # ---------------------
-      #  Create pieces table
-      # ---------------------
-      DownloadTable.create_table()
-
-      DownloadTable.fill_table(torrent.pieces_list, torrent.piece_length)
 
       # ------------------
       #    Piece manager
       # ------------------
+
       {:ok, _pid} = PieceManager.start_link(torrent)
 
       # ------------------
       #    Disk manager
       # ------------------
+
       {:ok, _pid} = DiskManager.start_link(torrent)
 
       # ---------------------
       #     Init downlaod
       # ---------------------
+
       Worker.init_cycle(worker_pid)
 
       {:ok, worker_pid}
