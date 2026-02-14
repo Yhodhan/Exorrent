@@ -87,7 +87,7 @@ defmodule Exorrent.Torrent do
     do: {:ok, List.flatten(url_list)}
 
   # -----------------
-  #    Trackers
+  #     Trackers
   # -----------------
 
   def size(%{"info" => info}), do: size(info)

@@ -109,7 +109,7 @@ defmodule Peers.Worker do
             Process.send_after(self(), :cycle, 2)
             {:noreply, %{state | status: :idle}}
 
-          _ ->
+          _error ->
             Logger.error("=== Piece could not be verified, retry download ===")
             # retry download
             {:noreply, %{state | status: :idle, interested: true}}

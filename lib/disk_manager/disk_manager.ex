@@ -23,7 +23,7 @@ defmodule DiskManager do
     Process.flag(:trap_exit, true)
     {:ok, fd} = File.open(torrent.name, [:raw, :read, :write, :binary])
 
-    #allocate full 0s
+    # allocate full 0s
     :file.pwrite(fd, torrent.size - 1, <<0>>)
 
     disk_state = %{fd: fd, piece_length: torrent.piece_length}
@@ -38,7 +38,7 @@ defmodule DiskManager do
       ) do
     offset = piece_index * piece_length
 
-    Logger.debug("piece index: #{piece_index}")
+    Logger.debug("=== piece index: #{piece_index} ===")
     Logger.debug("=== About to write in offset #{offset} ===")
 
     case :file.pwrite(fd, offset, piece) do
@@ -46,7 +46,7 @@ defmodule DiskManager do
         {:reply, :ok, disk_state}
 
       {:error, reason} ->
-        Logger.error("Error writing to disk: #{reason}")
+        Logger.error("=== Error writing to disk: #{reason} ===")
         {:reply, :error, disk_state}
     end
   end

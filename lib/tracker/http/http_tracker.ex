@@ -8,11 +8,8 @@ defmodule Tracker.HttpTracker do
   def send_request(url, torrent) do
     url = Messages.http_connection_req(torrent, url)
 
-    :inets.start()
-    :ssl.start()
-
     with {:ok, data} <- http_message(url),
-         {:ok, answer} <- decode_answer(data) do
+         {:ok, answer} <- decode_and_validate(data) do
       Peer.peers_addresses(answer)
     else
       {:error, reason} ->
@@ -24,32 +21,24 @@ defmodule Tracker.HttpTracker do
   def http_message(url) do
     Logger.info("=== Sending tcp message to #{url} ===")
 
-    case :httpc.request(:get, {to_charlist(url), []}, [], []) do
+    case :httpc.request(:get, {to_charlist(url), []}, [], body_format: :binary) do
       {:ok, {{_, 200, _}, _headers, body}} ->
-        Logger.info("=== Response received ===")
-        Decoder.decode(body)
+        {:ok, body}
 
-      {:ok, {{_, 503, reason}, _headers, _body}} ->
-        Logger.error("=== Failed to received msg: #{inspect(reason)} ===")
-        {:error, reason}
+      {:ok, {{_, status, reason}, _headers, _body}} ->
+        {:error, "HTTP Status #{status} reason #{reason}"}
 
       {:error, reason} ->
-        Logger.error("=== Failed to received msg: #{inspect(reason)} ===")
         {:error, reason}
     end
   end
 
-  defp decode_answer(data) when is_binary(data) do
-    Decoder.decode(data)
-    |> decode_answer()
-  end
-
-  defp decode_answer(data) do
-    case data do
-      %{"failure reason" => reason} ->
+  defp decode_and_validate(data) do
+    case Decoder.decode(data) do
+      {:ok, %{"failure reason" => reason}} ->
         {:error, reason}
 
-      _ ->
+      {:ok, data} ->
         {:ok, data}
     end
   end

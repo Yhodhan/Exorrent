@@ -8,15 +8,18 @@ defmodule Exorrent do
 
   require Logger
 
-  @torrent "torrents/ubuntu.torrent"
+  @torrent "torrents/ubuntu-22.04.torrent"
 
   def init() do
     Process.flag(:trap_exit, true)
 
+    :inets.start()
+    :ssl.start()
+
     {:ok, torrent} = Torrent.read_torrent(@torrent)
 
     with {:ok, peers} <- Tracker.get_peers(torrent) do
-      Logger.info("=== Peers found init connection ===")
+      Logger.info("=== Init workers ===")
 
       init_workers(torrent, peers)
 
@@ -27,10 +30,8 @@ defmodule Exorrent do
     end
   end
 
-  def init_workers(torrent, peers) do
-    Logger.info("=== Init workers ===")
-    Enum.each(peers, fn peer -> connection(torrent, peer) end)
-  end
+  def init_workers(torrent, peers),
+    do: Enum.each(peers, fn peer -> connection(torrent, peer) end)
 
   def connection(torrent, peer) do
     Logger.debug("=== Attemp connection, peer: #{inspect(peer)} ===")
