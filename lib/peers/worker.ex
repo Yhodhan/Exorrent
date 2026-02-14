@@ -23,9 +23,9 @@ defmodule Peers.Worker do
   def bitfield_map(pid),
     do: GenServer.call(pid, :bitfield)
 
-  # ----------------------
+  # -----------------------
   #   GenServer functions
-  # --------------------
+  # -----------------------
 
   def init(state) do
     Process.flag(:trap_exit, true)

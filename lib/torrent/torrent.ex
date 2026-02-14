@@ -83,6 +83,9 @@ defmodule Exorrent.Torrent do
   def get_trackers(%{"announce" => announce}),
     do: {:ok, [announce]}
 
+  def get_trackers(%{"url-list" => url_list}),
+    do: {:ok, List.flatten(url_list)}
+
   # -----------------
   #    Trackers
   # -----------------

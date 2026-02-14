@@ -25,4 +25,8 @@ exorrent-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# Torrent files to download
 *.torrent
+
+# Iso downloaded files
+*.iso

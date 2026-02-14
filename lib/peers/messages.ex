@@ -18,13 +18,7 @@ defmodule Peers.Messages do
     binary
     |> :binary.bin_to_list()
     |> Enum.map(fn byte ->
-      cond do
-        byte in ?0..?9 or byte in ?A..?Z or byte in ?a..?z or byte in ~c'-_.~' ->
-          <<byte>>
-
-        true ->
-          "%" <> Base.encode16(<<byte>>, case: :upper)
-      end
+      "%" <> Base.encode16(<<byte>>, case: :upper)
     end)
     |> Enum.join()
   end

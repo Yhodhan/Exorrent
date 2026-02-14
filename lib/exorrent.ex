@@ -1,10 +1,10 @@
 defmodule Exorrent do
+  alias Peers.Worker
+  alias Peers.Messages
   alias Exorrent.Torrent
   alias Exorrent.Tracker
-  alias Peers.PeerConnection
-  alias Peers.Messages
-  alias Peers.Worker
   alias Peers.PieceManager
+  alias Peers.PeerConnection
 
   require Logger
 
@@ -18,45 +18,42 @@ defmodule Exorrent do
     with {:ok, peers} <- Tracker.get_peers(torrent) do
       Logger.info("=== Peers found init connection ===")
 
-      {:ok, worker_pid} = connection(torrent, peers)
+      init_workers(torrent, peers)
 
       Logger.info("=== Download in progress ===")
-      worker_pid
     else
       {:error, _} ->
         Logger.error("=== No peers found, stop download ===")
     end
   end
 
-  def connection(torrent, peers) do
-    [peer | rest] = peers
+  def init_workers(torrent, peers) do
+    Logger.info("=== Init workers ===")
+    Enum.each(peers, fn peer -> connection(torrent, peer) end)
+  end
+
+  def connection(torrent, peer) do
     Logger.debug("=== Attemp connection, peer: #{inspect(peer)} ===")
 
     with {:ok, socket} <- PeerConnection.peer_connect(peer),
          {:ok, worker_pid} <- handshake(socket, torrent) do
-
       # ------------------
       #    Piece manager
       # ------------------
-
       {:ok, _pid} = PieceManager.start_link(torrent)
 
       # ------------------
       #    Disk manager
       # ------------------
-
       {:ok, _pid} = DiskManager.start_link(torrent)
 
-      # ---------------------
-      #     Init downlaod
-      # ---------------------
-
+      # ------------------
+      #    Init downlaod
+      # ------------------
       Worker.init_cycle(worker_pid)
-
-      {:ok, worker_pid}
     else
-      _ ->
-        connection(torrent, rest)
+      error ->
+        Logger.error("=== Error while connecting peer reason: #{error} ===")
     end
   end
 
