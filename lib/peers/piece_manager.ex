@@ -34,6 +34,9 @@ defmodule Peers.PieceManager do
   def status(piece_index),
     do: GenServer.call(__MODULE__, {:status, piece_index})
 
+  def get_if_available(piece_index, offset),
+    do: GenServer.call(__MODULE__, {:available, piece_index, offset})
+
   # ----------------------
   #   GenServer functions
   # ----------------------
@@ -95,7 +98,7 @@ defmodule Peers.PieceManager do
   end
 
   def handle_cast({:dowloading, piece_index}, pieces_state) do
-    index = parse_index(piece_index)
+    index = parse_value(piece_index)
 
     pieces_status =
       pieces_state.pieces_status
@@ -112,7 +115,7 @@ defmodule Peers.PieceManager do
     do: {:reply, pieces_state.pieces_map, pieces_state}
 
   def handle_call({:blocks_list, piece_index}, _from, pieces_state) do
-    index = parse_index(piece_index)
+    index = parse_value(piece_index)
 
     block_map =
       pieces_state.pieces_map
@@ -124,7 +127,7 @@ defmodule Peers.PieceManager do
   end
 
   def handle_call({:blocks, piece_index}, _from, pieces_state) do
-    index = parse_index(piece_index)
+    index = parse_value(piece_index)
 
     blocks =
       pieces_state.pieces_map
@@ -134,17 +137,42 @@ defmodule Peers.PieceManager do
     {:reply, blocks, pieces_state}
   end
 
-  # Tells when a piece is fully donwload
+  # --------------------------------------------------
+  #       Tells when a piece is fully donwload
+  # --------------------------------------------------
   def handle_call({:status, piece_index}, _from, pieces_state) do
-    index = parse_index(piece_index)
+    index = parse_value(piece_index)
     status = pieces_state.pieces_status[index]
 
     {:reply, status, pieces_state}
   end
 
-  # -------------------
-  #  Private functions
-  # -------------------
+  # --------------------------------------------------
+  #      Tells when a piece is available to share 
+  # --------------------------------------------------
+  def handle_call({:available, piece_index, offset}, _from, pieces_state) do
+    index = parse_value(piece_index)
+    offset = parse_value(offset)
+
+    status = pieces_state.pieces_status[index]
+
+    case status do
+      :done ->
+        block = pieces_state.pieces_map[index][offset]
+        {:reply, {:ok, block}, pieces_state}
+
+      _ ->
+        {:reply, :unavailable, pieces_state}
+    end
+  end
+
+  # --------------------------------------------------
+  #                 Private functions
+  # --------------------------------------------------
+
+  # --------------------------------------------------
+  #  Build the block map from the bitfield of a peer
+  # --------------------------------------------------
   defp build_block_map(piece_index, total_pieces, piece_length, blocks, size) do
     num_blocks =
       if piece_index == total_pieces - 1 do
@@ -160,27 +188,27 @@ defmodule Peers.PieceManager do
     end
   end
 
-  @doc """
-    status map can have three states
-    1 - miss
-    2 - downloading
-    3 - done
-  """
-  def build_statuses_map(indexes) do
+  # --------------------------------------------------
+  #  Piece can have three states
+  #  1 - miss
+  #  2 - downloading
+  #  3 - done
+  # --------------------------------------------------
+  defp build_statuses_map(indexes) do
     indexes
     |> Enum.map(fn index -> {index, :miss} end)
     |> Map.new()
   end
 
-  defp parse_index(piece_index) when is_binary(piece_index) do
+  defp parse_value(piece_index) when is_binary(piece_index) do
     <<val::32>> = piece_index
     val
   end
 
-  defp parse_index(piece_index),
+  defp parse_value(piece_index),
     do: piece_index
 
-  def missing_block?(pieces_state, index) do
+  defp missing_block?(pieces_state, index) do
     pieces_state
     |> Map.get(index)
     |> Enum.any?(fn b -> is_nil(b) end)

@@ -124,11 +124,11 @@ defmodule Peers.Messages do
 
   def piece(block_len, index, begin, block) do
     len = 9 + block_len
-    <<len::32, 7::8, index::binary, begin::binary, block::binary>>
+    <<len::32, 7::8, index::32, begin::32, block::binary>>
   end
 
   def cancel(index, begin, len),
-    do: <<13::32, 8::8, index::binary, begin::binary, len::binary>>
+    do: <<13::32, 8::8, index::32, begin::32, len::binary>>
 
   def port(listen_port),
     do: <<3::32, 9::8, listen_port::binary>>

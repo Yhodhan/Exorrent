@@ -6,6 +6,15 @@ defmodule Peers.Worker do
   use GenServer
   require Logger
 
+  @moduledoc """
+    This module handles the worker logics, which deals with the messages that the peer sends to the worker
+    connected into it.
+
+    The cycle awaits for a message to arrive, if its a bitfield then it stores in the PeerManager.
+    If it is a have message and is not downloading anything else then init to download that piece.
+    In any other case it just process the message normally.
+  """
+
   @block_size 16384
   # -------------------
   #   GenServer calls
@@ -69,7 +78,6 @@ defmodule Peers.Worker do
   def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
     Logger.info("=== Worker Cycle ===")
 
-    # Process.sleep(10000)
     receive_message(socket, state)
   end
 
@@ -152,7 +160,6 @@ defmodule Peers.Worker do
 
         {:ok, state} ->
           Process.send_after(self(), :cycle, 5)
-
           {:noreply, state}
       end
     else
@@ -169,31 +176,44 @@ defmodule Peers.Worker do
          do: {:ok, id, len - 1}
   end
 
-  # choke
+  @doc """
+  Handles incoming peer messages
+
+  0 - CHOKE
+  1 - UNCHOKE
+  3 - NOT INTERESTED
+  4 - HAVE
+  5 - BITFIELD
+  6 - BLOCK
+  7 - PIECE 
+  """
+  # ------------------------------------------------------------------------
+  #                                   CHOKE 
+  # ------------------------------------------------------------------------
   def process_message(0, _len, state) do
     Logger.info("=== choked message ===")
     {:ok, %{state | choke: true}}
   end
 
-  # unchoke
+  # ------------------------------------------------------------------------
+  #                                   UNCHOKE 
+  # ------------------------------------------------------------------------
   def process_message(1, _len, state) do
     Logger.info("=== unchoked message ===")
     {:ok, %{state | choke: false, unchoked: true}}
   end
 
-  # Interested
-  def process_message(2, _len, state) do
-    Logger.info("=== interested message ===")
-    {:ok, %{state | interested: true}}
-  end
-
-  # Not interested
+  # ------------------------------------------------------------------------
+  #                                 NOT INTERESTED 
+  # ------------------------------------------------------------------------
   def process_message(3, _len, state) do
     Logger.info("=== not interested message ===")
     {:ok, %{state | interested: false}}
   end
 
-  # Have
+  # ------------------------------------------------------------------------
+  #                                     HAVE 
+  # ------------------------------------------------------------------------
   def process_message(4, len, %{socket: socket} = state) do
     with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
       Logger.info("=== Piece index: #{inspect(piece_index)} ===")
@@ -211,16 +231,48 @@ defmodule Peers.Worker do
     end
   end
 
-  # Bitfield
+  # ------------------------------------------------------------------------
+  #                                BITFIELD 
+  # ------------------------------------------------------------------------
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       bitmap = Messages.make_bitfield(bitfield, total_pieces)
       PeerManager.store_bitfield(self(), bitmap)
 
-      {:noreply, %{state | status: :idle, interested: true}}
+      {:ok, %{state | status: :idle, interested: true}}
     end
   end
 
+  # ------------------------------------------------------------------------
+  #                              REQUEST BLOCK 
+  # ------------------------------------------------------------------------
+
+  # NOTE: this function is intended to be used when the client is ready to accept incoming connections
+  # IT should check whether the client actually has the block and send it to the requester 
+  def process_message(6, len, %{socket: socket, piece_length: piece_lenght} = state) do
+    with {:ok, <<index::32>>} <- :gen_tcp.recv(socket, 4),
+         {:ok, <<begin::32>>} <- :gen_tcp.recv(socket, 4),
+         {:ok, <<block_len::32>>} <- :gen_tcp.recv(socket, len - 8) do
+      Logger.info("=== Block requested ===")
+
+      if correct_sizes(block_len, index, begin, piece_lenght) do
+        case PieceManager.get_if_available(index, begin) do
+          {:ok, block} ->
+            msg = Messages.piece(block_len, index, begin, block)
+            :gen_tcp.send(socket, msg)
+
+          :unavailable ->
+            nil
+        end
+      end
+
+      {:ok, state}
+    end
+  end
+
+  # ------------------------------------------------------------------------
+  #                                 PIECE 
+  # ------------------------------------------------------------------------
   def process_message(7, len, %{socket: socket, requested: {piece_index, block_list}} = state) do
     with {:ok, <<index::32>>} <- :gen_tcp.recv(socket, 4),
          {:ok, <<begin::32>>} <- :gen_tcp.recv(socket, 4),
@@ -250,6 +302,7 @@ defmodule Peers.Worker do
 
   # ----------------------------
   #   Pieces request and build
+
   # ----------------------------
 
   def prepare_request(piece_index, state) do
@@ -306,5 +359,12 @@ defmodule Peers.Worker do
     Logger.info("=== Sending keep alive ===")
     keep_alive = Messages.keep_alive()
     :gen_tcp.send(socket, keep_alive)
+  end
+
+  defp correct_sizes(block_len, index, begin, piece_lenght) do
+    block_len > 0 and
+      block_len <= @block_size and
+      rem(begin, @block_size) == 0 and
+      begin + block_len <= piece_lenght
   end
 end
