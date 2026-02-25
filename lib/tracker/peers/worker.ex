@@ -1,6 +1,6 @@
 defmodule Peers.Worker do
   alias Peers.Messages
-  alias Peers.PieceManager
+  alias Exorrent.PieceManager
   alias Peers.PeerManager
 
   use GenServer
@@ -102,7 +102,7 @@ defmodule Peers.Worker do
         {:noreply, state, {:continue, :downloading}}
 
       true ->
-        case validate_piece(piece_index, state.pieces_list) do
+        case PieceManager.validate_piece(piece_index, state.pieces_list) do
           {:ok, verified_piece} ->
             Logger.debug("=== Verified piece ===")
 
@@ -311,25 +311,6 @@ defmodule Peers.Worker do
 
     {:ok, %{state | status: :downloading, requested: {piece_index, blocks_list}}}
   end
-
-  def validate_piece(piece_index, pieces_list) do
-    blocks =
-      piece_index
-      |> PieceManager.blocks()
-
-    piece = unify_blocks(blocks)
-    hash = :crypto.hash(:sha, piece)
-
-    if MapSet.member?(pieces_list, hash),
-      do: {:ok, piece},
-      else: {:error, piece}
-  end
-
-  def unify_blocks([]),
-    do: <<>>
-
-  def unify_blocks([block | rest]),
-    do: block <> unify_blocks(rest)
 
   # -----------------------------------
   #     Handle keep alive and errors

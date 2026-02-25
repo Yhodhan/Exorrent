@@ -1,4 +1,4 @@
-defmodule Peers.PieceManager do
+defmodule Exorrent.PieceManager do
   alias Exorrent.Torrent
 
   use GenServer
@@ -36,6 +36,9 @@ defmodule Peers.PieceManager do
 
   def get_if_available(piece_index, offset),
     do: GenServer.call(__MODULE__, {:available, piece_index, offset})
+
+  def validate_piece(piece_index, pieces_list),
+    do: GenServer.call(__MODULE__, {:validate_piece, piece_index, pieces_list})
 
   # ----------------------
   #   GenServer functions
@@ -115,15 +118,7 @@ defmodule Peers.PieceManager do
     do: {:reply, pieces_state.pieces_map, pieces_state}
 
   def handle_call({:blocks_list, piece_index}, _from, pieces_state) do
-    index = parse_value(piece_index)
-
-    block_map =
-      pieces_state.pieces_map
-      |> Map.get(index)
-      |> Map.keys()
-      |> :queue.from_list()
-
-    {:reply, block_map, pieces_state}
+    {:reply, get_index_block_map(piece_index, pieces_state), pieces_state}
   end
 
   def handle_call({:blocks, piece_index}, _from, pieces_state) do
@@ -166,6 +161,10 @@ defmodule Peers.PieceManager do
     end
   end
 
+  def handle_call({:validate_piece, piece_index, piece_list}, _from, pieces_state) do
+    {:reply, validate(piece_index, piece_list), pieces_state}
+  end
+
   # --------------------------------------------------
   #                 Private functions
   # --------------------------------------------------
@@ -186,6 +185,18 @@ defmodule Peers.PieceManager do
     for block_index <- 0..(num_blocks - 1), into: %{} do
       {block_index, nil}
     end
+  end
+
+  # --------------------------------------------------
+  #        Obtain the block map from a piece 
+  # --------------------------------------------------
+  def get_index_block_map(piece_index, pieces_state) do
+    index = parse_value(piece_index)
+
+    pieces_state.pieces_map
+    |> Map.get(index)
+    |> Map.keys()
+    |> :queue.from_list()
   end
 
   # --------------------------------------------------
@@ -213,4 +224,24 @@ defmodule Peers.PieceManager do
     |> Map.get(index)
     |> Enum.any?(fn b -> is_nil(b) end)
   end
+
+  # -----------------------------------
+  #          Validates a piece
+  # -----------------------------------
+  defp validate(piece_index, pieces_list) do
+    blocks = get_index_block_map(piece_index, pieces_list)
+
+    piece = unify_blocks(blocks)
+    hash = :crypto.hash(:sha, piece)
+
+    if MapSet.member?(pieces_list, hash),
+      do: {:ok, piece},
+      else: {:error, piece}
+  end
+
+  defp unify_blocks([]),
+    do: <<>>
+
+  defp unify_blocks([block | rest]),
+    do: block <> unify_blocks(rest)
 end

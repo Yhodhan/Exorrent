@@ -2,7 +2,7 @@ defmodule Exorrent do
   alias Exorrent.Torrent
   alias Exorrent.Tracker
   alias Exorrent.Webseed
-  alias Peers.PieceManager
+  alias Exorrent.PieceManager
 
   require Logger
 

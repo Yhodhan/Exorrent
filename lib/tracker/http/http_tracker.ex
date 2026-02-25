@@ -10,7 +10,6 @@ defmodule Tracker.HttpTracker do
 
     with {:ok, data} <- http_message(url),
          {:ok, answer} <- decode_and_validate(data) do
-      IO.inspect(answer, label: "peers")
       Peer.peers_addresses(answer)
     else
       {:error, reason} ->

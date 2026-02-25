@@ -1,4 +1,4 @@
-defmodule Weebseed.Worker do
+defmodule Webseed.Worker do
   use GenServer
   require Logger
 
@@ -11,8 +11,9 @@ defmodule Weebseed.Worker do
   #   GenServer calls
   # -------------------
 
-  def start_link(state \\ %{}),
-    do: GenServer.start_link(__MODULE__, state)
+  def start_link(state \\ %{}) do
+    GenServer.start_link(__MODULE__, state, name: __MODULE__)
+  end
 
   # -----------------------
   #   GenServer functions
@@ -20,6 +21,11 @@ defmodule Weebseed.Worker do
 
   def init(state) do
     Process.flag(:trap_exit, true)
+    Process.send_after(self(), :connect, 1)
     {:ok, state}
+  end
+
+  def handle_info(:connect, state) do
+    url = state.url
   end
 end
