@@ -255,7 +255,7 @@ defmodule Peers.Worker do
          {:ok, <<block_len::32>>} <- :gen_tcp.recv(socket, len - 8) do
       Logger.info("=== Block requested ===")
 
-      if correct_sizes(block_len, index, begin, piece_lenght) do
+      if correct_sizes(block_len, begin, piece_lenght) do
         case PieceManager.get_if_available(index, begin) do
           {:ok, block} ->
             msg = Messages.piece(block_len, index, begin, block)
@@ -361,7 +361,7 @@ defmodule Peers.Worker do
     :gen_tcp.send(socket, keep_alive)
   end
 
-  defp correct_sizes(block_len, index, begin, piece_lenght) do
+  defp correct_sizes(block_len, begin, piece_lenght) do
     block_len > 0 and
       block_len <= @block_size and
       rem(begin, @block_size) == 0 and

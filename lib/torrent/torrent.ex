@@ -8,7 +8,8 @@ defmodule Exorrent.Torrent do
     :name,
     :info_hash,
     :size,
-    :trackers,
+    :type,
+    :urls,
     :total_pieces,
     :piece_length,
     :pieces_list,
@@ -19,7 +20,8 @@ defmodule Exorrent.Torrent do
     with {:ok, bencode} <- File.read(torrent),
          {:ok, torr} <- Decoder.decode(bencode),
          {:ok, info_hash} <- get_info_hash(torr),
-         {:ok, trackers} <- get_trackers(torr),
+         {:ok, type} <- get_type(torr),
+         {:ok, urls} <- get_urls(torr),
          {:ok, piece_length} <- piece_length(torr),
          {:ok, pieces_list} <- get_pieces_list(torr),
          size <- size(torr) do
@@ -28,7 +30,8 @@ defmodule Exorrent.Torrent do
          name: get_name(torr),
          info_hash: info_hash,
          size: size,
-         trackers: trackers,
+         type: type,
+         urls: urls,
          total_pieces: amount_pieces(torr),
          piece_length: piece_length,
          pieces_list: MapSet.new(pieces_list),
@@ -49,12 +52,19 @@ defmodule Exorrent.Torrent do
   def blocks(piece_length),
     do: div(piece_length, 16384)
 
-  # ------------------
+  # ---------------------------------------------------
+  def get_type(%{"url-list" => _}),
+    do: {:ok, :webseeds}
+
+  def get_type(%{"announce_list" => _}),
+    do: {:ok, :trackers}
+
+  # ---------------------------------------------------
 
   def piece_length(%{"info" => info}),
     do: {:ok, info["piece length"]}
 
-  # -----------------
+  # ---------------------------------------------------
 
   def get_pieces_list(%{"info" => info}) do
     {:ok,
@@ -68,27 +78,27 @@ defmodule Exorrent.Torrent do
   def pieces_hashes(<<hash::binary-size(20), rest::binary>>),
     do: [hash] ++ pieces_hashes(rest)
 
-  # -----------------
+  # ---------------------------------------------------
 
   def get_info_hash(%{"info" => info}) do
     {:ok, raw_data} = Encoder.encode(info)
     {:ok, :crypto.hash(:sha, raw_data)}
   end
 
-  # -----------------
+  # ---------------------------------------------------
+  #                        Trackers
+  # ---------------------------------------------------
 
-  def get_trackers(%{"announce-list" => announce_list}),
+  def get_urls(%{"announce-list" => announce_list}),
     do: {:ok, List.flatten(announce_list)}
 
-  def get_trackers(%{"announce" => announce}),
+  def get_urls(%{"announce" => announce}),
     do: {:ok, [announce]}
 
-  def get_trackers(%{"url-list" => url_list}),
+  def get_urls(%{"url-list" => url_list}),
     do: {:ok, List.flatten(url_list)}
 
-  # -----------------
-  #     Trackers
-  # -----------------
+  # ---------------------------------------------------
 
   def size(%{"info" => info}), do: size(info)
   def size(%{"length" => length}), do: length
