@@ -302,7 +302,6 @@ defmodule Peers.Worker do
 
   # ----------------------------
   #   Pieces request and build
-
   # ----------------------------
 
   def prepare_request(piece_index, state) do

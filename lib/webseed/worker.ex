@@ -12,7 +12,7 @@ defmodule Webseed.Worker do
   # -------------------
 
   def start_link(state \\ %{}) do
-    GenServer.start_link(__MODULE__, state, name: __MODULE__)
+    GenServer.start_link(__MODULE__, state)
   end
 
   # -----------------------
@@ -26,6 +26,11 @@ defmodule Webseed.Worker do
   end
 
   def handle_info(:connect, state) do
-    url = state.url
+    {:noreply, state, {:continue, :cycle}}
+  end
+
+  def handle_continue(:cycle, state) do
+    Logger.info("=== Awaiting to seed ===")
+    {:noreply, state, {:continue, :cycle}}
   end
 end
