@@ -43,12 +43,15 @@ defmodule Exorrent.Torrent do
     end
   end
 
+  # ---------------------------------------------------
   def get_name(%{"info" => info}),
     do: info["name"]
 
+  # ---------------------------------------------------
   def amount_pieces(%{"info" => info}),
     do: div(byte_size(info["pieces"]), 20)
 
+  # ---------------------------------------------------
   def blocks(piece_length),
     do: div(piece_length, 16384)
 

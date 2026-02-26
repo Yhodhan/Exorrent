@@ -53,8 +53,8 @@ defmodule Exorrent.PieceManager do
   def get_if_available(piece_index, offset),
     do: GenServer.call(__MODULE__, {:available, piece_index, offset})
 
-  def validate_piece(piece_index, pieces_list),
-    do: GenServer.call(__MODULE__, {:validate_piece, piece_index, pieces_list})
+  def validate_piece(piece_index),
+    do: GenServer.call(__MODULE__, {:validate_piece, piece_index})
 
   # This is used by the webseeds since they dont have a bitfield or Have messages.
   def request_work(),
@@ -181,8 +181,8 @@ defmodule Exorrent.PieceManager do
     end
   end
 
-  def handle_call({:validate_piece, piece_index, piece_list}, _from, pieces_state) do
-    {:reply, validate(piece_index, piece_list), pieces_state}
+  def handle_call({:validate_piece, piece_index}, _from, pieces_state) do
+    {:reply, validate(piece_index, pieces_state.piece_list), pieces_state}
   end
 
   def handle_call(:request, pieces_state) do
@@ -197,7 +197,7 @@ defmodule Exorrent.PieceManager do
         {:reply, {:ok, piece_index}, pieces_state}
 
       _ ->
-        {:reply, {:error, nil}, pieces_state}
+        {:reply, {:none, nil}, pieces_state}
     end
   end
 
@@ -213,7 +213,7 @@ defmodule Exorrent.PieceManager do
       if piece_index == total_pieces - 1 do
         # last piece, maybe smaller
         (size - (total_pieces - 1) * piece_length)
-        |> div(16384)
+        |> div(@block_size)
       else
         blocks
       end
@@ -267,7 +267,10 @@ defmodule Exorrent.PieceManager do
   defp validate(piece_index, pieces_list) do
     index = parse_value(piece_index)
 
-    blocks = get_index_block_map(index, pieces_list)
+    blocks =
+      pieces_list
+      |> Map.get(index)
+      |> Enum.map(fn {_k, v} -> v end)
 
     piece = unify_blocks(blocks)
     hash = :crypto.hash(:sha, piece)

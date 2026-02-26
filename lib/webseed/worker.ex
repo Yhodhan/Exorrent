@@ -6,6 +6,7 @@ defmodule Webseed.Worker do
     This module handles the worker logics, which deals with the messages that are sent to the  
     server seeds. 
   """
+  alias Exorrent.PieceManager
 
   # -------------------
   #   GenServer calls
@@ -30,8 +31,20 @@ defmodule Webseed.Worker do
   end
 
   def handle_continue(:cycle, state) do
-    Logger.info("=== Awaiting to seed ===")
-    {:noreply, state, {:continue, :cycle}}
+    url = state.url
+    %{piece_length: length, size: size} = state.torrent
+
+    with {:ok, piece_index} <- PieceManager.request_work(),
+         {:ok, piece} <- fetch_piece(url, piece_index, length, size) do
+         PieceManager.validate_piece(piece)
+    else
+      {:none, _} ->
+        {:stop, :normal, state}
+
+      {:error, error} ->
+        Logger.error("=== Error fetching piece: #{error}")
+        {:noreply, state, {:continue, :cycle}}
+    end
   end
 
   # ----------- PRIVATE FUNCTIONS -------------
