@@ -33,4 +33,36 @@ defmodule Webseed.Worker do
     Logger.info("=== Awaiting to seed ===")
     {:noreply, state, {:continue, :cycle}}
   end
+
+  # ----------- PRIVATE FUNCTIONS -------------
+  defp fetch_piece(url, piece_index, piece_length, total_size) do
+    start_byte = piece_index * piece_length
+    end_byte = min(start_byte + piece_length - 1, total_size - 1)
+
+    headers = [
+      {"Range", "bytes=#{start_byte}-#{end_byte}"}
+    ]
+
+    request = {String.to_charlist(url), headers}
+
+    http_opts = []
+    opts = [body_format: :binary]
+
+    case :httpc.request(:get, request, http_opts, opts) do
+      {:ok, {{_, 206, _}, _headers, body}} ->
+        {:ok, body}
+
+      {:ok, {{_, 200, _}, _headers, body}} ->
+        # Server ignore Range header
+        # You must manually slice it
+        expected_size = end_byte - start_byte + 1
+        {:ok, binary_part(body, start_byte, expected_size)}
+
+      {:ok, {{_, status, _}, _, _}} ->
+        {:error, {:unexpected_status, status}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 end

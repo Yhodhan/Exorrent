@@ -6,6 +6,22 @@ defmodule Exorrent.PieceManager do
 
   @moduledoc """
     Manager of pieces
+
+    It keeps two dictionaries one whose keys are the piece indexes and 
+    and the block indexes: 
+
+    %{
+     piece_index => %{
+         1 => nil,
+         2 => ni,
+         ..
+         }
+    }
+
+  and other dictionary that has the status of each piece
+    %{
+     piece_index => :miss | :downloading | :done
+    }
   """
 
   @block_size 16384
@@ -39,6 +55,10 @@ defmodule Exorrent.PieceManager do
 
   def validate_piece(piece_index, pieces_list),
     do: GenServer.call(__MODULE__, {:validate_piece, piece_index, pieces_list})
+
+  # This is used by the webseeds since they dont have a bitfield or Have messages.
+  def request_work(),
+    do: GenServer.call(__MODULE__, :request_work)
 
   # ----------------------
   #   GenServer functions
@@ -229,7 +249,9 @@ defmodule Exorrent.PieceManager do
   #          Validates a piece
   # -----------------------------------
   defp validate(piece_index, pieces_list) do
-    blocks = get_index_block_map(piece_index, pieces_list)
+    index = parse_value(piece_index)
+
+    blocks = get_index_block_map(index, pieces_list)
 
     piece = unify_blocks(blocks)
     hash = :crypto.hash(:sha, piece)

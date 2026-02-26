@@ -8,8 +8,10 @@ defmodule Exorrent.Webseed do
   end
 
   def init_workers(urls, torrent) do
-    urls
-    |> Enum.each(fn url ->  init_worker(url, torrent) end)
+    [url | _rest ] = urls
+    init_worker(url, torrent)
+    #urls
+    #|> Enum.each(fn url ->  init_worker(url, torrent) end)
   end
 
   def init_worker(url, torrent) do
