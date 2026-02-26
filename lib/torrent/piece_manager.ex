@@ -185,6 +185,22 @@ defmodule Exorrent.PieceManager do
     {:reply, validate(piece_index, piece_list), pieces_state}
   end
 
+  def handle_call(:request, pieces_state) do
+    statuses = pieces_state.pieces_status
+
+    case Enum.find(statuses, fn {_k, v} -> v == :miss end) do
+      {piece_index, _status} ->
+        # change status to downloading
+        new_stats = Map.put(statuses, piece_index, :downloading)
+        pieces_state = Map.put(pieces_state, :pieces_status, new_stats)
+
+        {:reply, {:ok, piece_index}, pieces_state}
+
+      _ ->
+        {:reply, {:error, nil}, pieces_state}
+    end
+  end
+
   # --------------------------------------------------
   #                 Private functions
   # --------------------------------------------------
