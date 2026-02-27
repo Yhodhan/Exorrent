@@ -15,7 +15,7 @@ defmodule Exorrent.Webseed do
   end
 
   def init_worker(url, torrent) do
-    state = %{url: url, torr: torrent}
+    state = %{url: url, torrent: torrent}
     {:ok, _pid} = Worker.start_link(state)
   end
 end

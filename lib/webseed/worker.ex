@@ -27,19 +27,31 @@ defmodule Webseed.Worker do
   end
 
   def handle_info(:connect, state) do
+    Logger.info("=== Init connection webseed worker ====")
     {:noreply, state, {:continue, :cycle}}
   end
 
   def handle_continue(:cycle, state) do
-    url = state.url
+    base_url = state.url
+
+    url =
+      if String.ends_with?(base_url, "/") do
+        base_url <> state.torrent.name
+      else
+        base_url <> "/" <> state.torrent.name
+      end
+
     %{piece_length: length, size: size} = state.torrent
 
     with {:ok, piece_index} <- PieceManager.request_work(),
          {:ok, piece} <- fetch_piece(url, piece_index, length, size) do
-         PieceManager.validate_piece(piece)
+      Logger.info("=== Piece obtained: #{piece_index} ===")
+      PieceManager.validate_piece(piece)
+      {:noreply, state, {:continue, :cycle}}
     else
       {:none, _} ->
         {:stop, :normal, state}
+        {:noreply, state, {:continue, :cycle}}
 
       {:error, error} ->
         Logger.error("=== Error fetching piece: #{error}")
@@ -49,14 +61,16 @@ defmodule Webseed.Worker do
 
   # ----------- PRIVATE FUNCTIONS -------------
   defp fetch_piece(url, piece_index, piece_length, total_size) do
+    Logger.info("Fetch piece index #{piece_index} from #{to_charlist(url)}")
+
     start_byte = piece_index * piece_length
     end_byte = min(start_byte + piece_length - 1, total_size - 1)
 
     headers = [
-      {"Range", "bytes=#{start_byte}-#{end_byte}"}
+      {'Range', to_charlist("bytes=#{start_byte}-#{end_byte}")}
     ]
 
-    request = {String.to_charlist(url), headers}
+    request = {to_charlist(url), headers}
 
     http_opts = []
     opts = [body_format: :binary]

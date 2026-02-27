@@ -44,9 +44,6 @@ defmodule Exorrent.PieceManager do
   def blocks_list(piece_index),
     do: GenServer.call(__MODULE__, {:blocks_list, piece_index})
 
-  def blocks(piece_index),
-    do: GenServer.call(__MODULE__, {:blocks, piece_index})
-
   def status(piece_index),
     do: GenServer.call(__MODULE__, {:status, piece_index})
 
@@ -68,7 +65,8 @@ defmodule Exorrent.PieceManager do
         total_pieces: total_pieces,
         blocks: blocks,
         piece_length: piece_length,
-        size: size
+        size: size,
+        pieces_list: pieces_list
       }) do
     Logger.info("=== Init Piece Manager ===")
     # create dictionary
@@ -86,7 +84,12 @@ defmodule Exorrent.PieceManager do
       |> Map.keys()
       |> build_statuses_map()
 
-    pieces_state = %{pieces_map: pieces_map, pieces_status: pieces_status}
+    pieces_state = %{
+      pieces_map: pieces_map,
+      pieces_status: pieces_status,
+      pieces_list: pieces_list,
+      piece_length: piece_length
+    }
 
     {:ok, pieces_state}
   end
@@ -141,17 +144,6 @@ defmodule Exorrent.PieceManager do
     {:reply, get_index_block_map(piece_index, pieces_state), pieces_state}
   end
 
-  def handle_call({:blocks, piece_index}, _from, pieces_state) do
-    index = parse_value(piece_index)
-
-    blocks =
-      pieces_state.pieces_map
-      |> Map.get(index)
-      |> Map.values()
-
-    {:reply, blocks, pieces_state}
-  end
-
   # --------------------------------------------------
   #       Tells when a piece is fully donwload
   # --------------------------------------------------
@@ -181,11 +173,17 @@ defmodule Exorrent.PieceManager do
     end
   end
 
+  # NOTE: addapt this function to take pieces and blocks
   def handle_call({:validate_piece, piece_index}, _from, pieces_state) do
-    {:reply, validate(piece_index, pieces_state.piece_list), pieces_state}
+    if byte_size(piece_index) == pieces_state.piece_length do
+      # is a full piece
+      {:reply, validate_piece(piece_index, pieces_state.pieces_list), pieces_state}
+    else
+      {:reply, validate(piece_index, pieces_state), pieces_state}
+    end
   end
 
-  def handle_call(:request, pieces_state) do
+  def handle_call(:request_work, _from, pieces_state) do
     statuses = pieces_state.pieces_status
 
     case Enum.find(statuses, fn {_k, v} -> v == :miss end) do
@@ -264,25 +262,29 @@ defmodule Exorrent.PieceManager do
   # -----------------------------------
   #          Validates a piece
   # -----------------------------------
-  defp validate(piece_index, pieces_list) do
+  defp unify_blocks([]),
+    do: <<>>
+
+  defp unify_blocks([block | rest]),
+    do: block <> unify_blocks(rest)
+
+  defp validate(piece_index, %{pieces_map: pieces_map, pieces_list: pieces_list} = _pieces_state) do
     index = parse_value(piece_index)
 
     blocks =
-      pieces_list
+      pieces_map
       |> Map.get(index)
-      |> Enum.map(fn {_k, v} -> v end)
+      |> Map.values()
 
     piece = unify_blocks(blocks)
+    validate_piece(piece, pieces_list)
+  end
+
+  defp validate_piece(piece, pieces_list) do
     hash = :crypto.hash(:sha, piece)
 
     if MapSet.member?(pieces_list, hash),
       do: {:ok, piece},
       else: {:error, piece}
   end
-
-  defp unify_blocks([]),
-    do: <<>>
-
-  defp unify_blocks([block | rest]),
-    do: block <> unify_blocks(rest)
 end
