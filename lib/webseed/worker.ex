@@ -41,25 +41,33 @@ defmodule Webseed.Worker do
         base_url <> "/" <> state.torrent.name
       end
 
-    %{piece_length: length, size: size} = state.torrent
+    case PieceManager.request_work() do
+      {:ok, piece_index} ->
+        handle_piece(url, piece_index, state)
 
-    with {:ok, piece_index} <- PieceManager.request_work(),
-         {:ok, data} <- fetch_piece(url, piece_index, length, size),
-         {:ok, piece} <- PieceManager.validate_piece(data),
-         :ok <- DiskManager.write_piece(piece_index, piece) do
-
-      {:noreply, state, {:continue, :cycle}}
-    else
       {:none, _} ->
         {:noreply, state, {:continue, :cycle}}
-
-      {:error, {error, 404}} ->
-        Logger.error("=== Error fetching piece: #{error}")
-        {:stop, :normal, state}
     end
   end
 
   # ----------- PRIVATE FUNCTIONS -------------
+  defp handle_piece(url, piece_index, state) do
+    %{piece_length: length, size: size} = state.torrent
+
+    with {:ok, data} <- fetch_piece(url, piece_index, length, size),
+         {:ok, piece} <- PieceManager.validate_piece(data),
+         :ok <- DiskManager.write_piece(piece_index, piece) do
+      PieceManager.update_status(piece_index, :done)
+
+      {:noreply, state, {:continue, :cycle}}
+    else
+      {:error, {error, _}} ->
+        Logger.error("=== Error fetching piece: #{error}")
+        PieceManager.update_status(piece_index, :miss)
+        {:stop, :normal, state}
+    end
+  end
+
   defp fetch_piece(url, piece_index, piece_length, total_size) do
     Logger.info("Fetch piece index #{piece_index} from #{to_charlist(url)}")
 
@@ -77,20 +85,16 @@ defmodule Webseed.Worker do
 
     case :httpc.request(:get, request, http_opts, opts) do
       {:ok, {{_, 206, _}, _headers, body}} ->
-        IO.inspect("OK 206")
-        IO.inspect("byte_size: #{byte_size(body)}")
         {:ok, body}
 
       {:ok, {{_, 200, _}, _headers, body}} ->
         # Server ignore Range header
         # You must manually slice it
-        IO.inspect("OK 200")
-        IO.inspect(byte_size(body))
         expected_size = end_byte - start_byte + 1
         {:ok, binary_part(body, start_byte, expected_size)}
 
       {:ok, {{_, status, _}, _, _}} ->
-        IO.inspect("Error status: #{status}")
+        Logger.error("Error status: #{status}")
         {:error, {:unexpected_status, status}}
 
       {:error, reason} ->

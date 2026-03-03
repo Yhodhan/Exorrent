@@ -35,9 +35,6 @@ defmodule Exorrent.PieceManager do
   def store_block(index, begin, block),
     do: GenServer.cast(__MODULE__, {:store_block, index, begin, block})
 
-  def downloading(piece_index),
-    do: GenServer.cast(__MODULE__, {:downloading, piece_index})
-
   def pieces_map(),
     do: GenServer.call(__MODULE__, :pieces)
 
@@ -52,6 +49,9 @@ defmodule Exorrent.PieceManager do
 
   def validate_piece(piece_index),
     do: GenServer.call(__MODULE__, {:validate_piece, piece_index})
+
+  def update_status(piece_index, status),
+    do: GenServer.call(__MODULE__, {:update_status, piece_index, status})
 
   # This is used by the webseeds since they dont have a bitfield or Have messages.
   def request_work(),
@@ -125,20 +125,6 @@ defmodule Exorrent.PieceManager do
     {:noreply, pieces_state}
   end
 
-  def handle_cast({:dowloading, piece_index}, pieces_state) do
-    index = parse_value(piece_index)
-
-    pieces_status =
-      pieces_state.pieces_status
-      |> Map.put(index, :downloading)
-
-    pieces_state =
-      pieces_state
-      |> Map.put(:pieces_status, pieces_status)
-
-    {:noreply, pieces_state}
-  end
-
   def handle_call(:pieces, _from, pieces_state),
     do: {:reply, pieces_state.pieces_map, pieces_state}
 
@@ -175,7 +161,9 @@ defmodule Exorrent.PieceManager do
     end
   end
 
-  # NOTE: addapt this function to take pieces and blocks
+  # --------------------------------------------------
+  #         Validate a block against its hash 
+  # --------------------------------------------------
   def handle_call({:validate_piece, piece_index}, _from, pieces_state) do
     case pieces_state.type do
       :webseeds ->
@@ -199,6 +187,24 @@ defmodule Exorrent.PieceManager do
 
       _ ->
         {:reply, {:none, nil}, pieces_state}
+    end
+  end
+
+  def handle_call({:update_status, piece_index, status}, _from, pieces_state) do
+    if status not in [:miss, :downloading, :done] do
+      {:reply, :ok, pieces_state}
+    else
+      index = parse_value(piece_index)
+
+      pieces_status =
+        pieces_state.pieces_status
+        |> Map.put(index, status)
+
+      pieces_state =
+        pieces_state
+        |> Map.put(:pieces_status, pieces_status)
+
+      {:reply, :ok, pieces_state}
     end
   end
 
