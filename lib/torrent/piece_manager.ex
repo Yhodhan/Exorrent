@@ -66,7 +66,8 @@ defmodule Exorrent.PieceManager do
         blocks: blocks,
         piece_length: piece_length,
         size: size,
-        pieces_list: pieces_list
+        pieces_list: pieces_list,
+        type: type
       }) do
     Logger.info("=== Init Piece Manager ===")
     # create dictionary
@@ -88,7 +89,8 @@ defmodule Exorrent.PieceManager do
       pieces_map: pieces_map,
       pieces_status: pieces_status,
       pieces_list: pieces_list,
-      piece_length: piece_length
+      piece_length: piece_length,
+      type: type
     }
 
     {:ok, pieces_state}
@@ -175,11 +177,12 @@ defmodule Exorrent.PieceManager do
 
   # NOTE: addapt this function to take pieces and blocks
   def handle_call({:validate_piece, piece_index}, _from, pieces_state) do
-    if byte_size(piece_index) == pieces_state.piece_length do
-      # is a full piece
-      {:reply, validate_piece(piece_index, pieces_state.pieces_list), pieces_state}
-    else
-      {:reply, validate(piece_index, pieces_state), pieces_state}
+    case pieces_state.type do
+      :webseeds ->
+        {:reply, validate_piece(piece_index, pieces_state.pieces_list), pieces_state}
+
+      :trackers ->
+        {:reply, validate(piece_index, pieces_state), pieces_state}
     end
   end
 

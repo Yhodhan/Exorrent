@@ -17,7 +17,7 @@ defmodule Webseed.Worker do
   end
 
   # -----------------------
-  #   GenServer functions
+  #   GenServer function
   # -----------------------
 
   def init(state) do
@@ -44,18 +44,18 @@ defmodule Webseed.Worker do
     %{piece_length: length, size: size} = state.torrent
 
     with {:ok, piece_index} <- PieceManager.request_work(),
-         {:ok, piece} <- fetch_piece(url, piece_index, length, size) do
-      Logger.info("=== Piece obtained: #{piece_index} ===")
-      PieceManager.validate_piece(piece)
+         {:ok, data} <- fetch_piece(url, piece_index, length, size),
+         {:ok, piece} <- PieceManager.validate_piece(data),
+         :ok <- DiskManager.write_piece(piece_index, piece) do
+
       {:noreply, state, {:continue, :cycle}}
     else
       {:none, _} ->
-        {:stop, :normal, state}
         {:noreply, state, {:continue, :cycle}}
 
-      {:error, error} ->
+      {:error, {error, 404}} ->
         Logger.error("=== Error fetching piece: #{error}")
-        {:noreply, state, {:continue, :cycle}}
+        {:stop, :normal, state}
     end
   end
 
@@ -67,7 +67,7 @@ defmodule Webseed.Worker do
     end_byte = min(start_byte + piece_length - 1, total_size - 1)
 
     headers = [
-      {'Range', to_charlist("bytes=#{start_byte}-#{end_byte}")}
+      {~c'Range', to_charlist("bytes=#{start_byte}-#{end_byte}")}
     ]
 
     request = {to_charlist(url), headers}
@@ -77,15 +77,20 @@ defmodule Webseed.Worker do
 
     case :httpc.request(:get, request, http_opts, opts) do
       {:ok, {{_, 206, _}, _headers, body}} ->
+        IO.inspect("OK 206")
+        IO.inspect("byte_size: #{byte_size(body)}")
         {:ok, body}
 
       {:ok, {{_, 200, _}, _headers, body}} ->
         # Server ignore Range header
         # You must manually slice it
+        IO.inspect("OK 200")
+        IO.inspect(byte_size(body))
         expected_size = end_byte - start_byte + 1
         {:ok, binary_part(body, start_byte, expected_size)}
 
       {:ok, {{_, status, _}, _, _}} ->
+        IO.inspect("Error status: #{status}")
         {:error, {:unexpected_status, status}}
 
       {:error, reason} ->

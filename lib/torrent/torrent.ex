@@ -56,11 +56,13 @@ defmodule Exorrent.Torrent do
     do: div(piece_length, 16384)
 
   # ---------------------------------------------------
-  def get_type(%{"url-list" => _}),
-    do: {:ok, :webseeds}
-
-  def get_type(%{"announce_list" => _}),
-    do: {:ok, :trackers}
+  def get_type(torrent) do
+    if Map.has_key?(torrent, "url-list") do
+      {:ok, :webseeds}
+    else
+      {:ok, :trackers}
+    end
+  end
 
   # ---------------------------------------------------
 
@@ -91,15 +93,14 @@ defmodule Exorrent.Torrent do
   # ---------------------------------------------------
   #                        Trackers
   # ---------------------------------------------------
+  def get_urls(%{"url-list" => url_list}),
+    do: {:ok, List.flatten(url_list)}
 
   def get_urls(%{"announce-list" => announce_list}),
     do: {:ok, List.flatten(announce_list)}
 
   def get_urls(%{"announce" => announce}),
     do: {:ok, [announce]}
-
-  def get_urls(%{"url-list" => url_list}),
-    do: {:ok, List.flatten(url_list)}
 
   # ---------------------------------------------------
 
