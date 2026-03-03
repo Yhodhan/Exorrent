@@ -1,8 +1,10 @@
 defmodule Exorrent.Torrent do
   alias Bencoder.Decoder
-  alias Bencoder.Encoder
+  alias Exorrent.InfoHash
 
   require Logger
+
+  @block_size 16384
 
   defstruct [
     :name,
@@ -19,7 +21,7 @@ defmodule Exorrent.Torrent do
   def read_torrent(torrent) do
     with {:ok, bencode} <- File.read(torrent),
          {:ok, torr} <- Decoder.decode(bencode),
-         {:ok, info_hash} <- get_info_hash(torr),
+         {:ok, info_hash} <- InfoHash.raw_info_hash(bencode),
          {:ok, type} <- get_type(torr),
          {:ok, urls} <- get_urls(torr),
          {:ok, piece_length} <- piece_length(torr),
@@ -53,7 +55,7 @@ defmodule Exorrent.Torrent do
 
   # ---------------------------------------------------
   def blocks(piece_length),
-    do: div(piece_length, 16384)
+    do: div(piece_length, @block_size)
 
   # ---------------------------------------------------
   def get_type(torrent) do
@@ -82,13 +84,6 @@ defmodule Exorrent.Torrent do
 
   def pieces_hashes(<<hash::binary-size(20), rest::binary>>),
     do: [hash] ++ pieces_hashes(rest)
-
-  # ---------------------------------------------------
-
-  def get_info_hash(%{"info" => info}) do
-    {:ok, raw_data} = Encoder.encode(info)
-    {:ok, :crypto.hash(:sha, raw_data)}
-  end
 
   # ---------------------------------------------------
   #                        Trackers
