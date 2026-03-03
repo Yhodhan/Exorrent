@@ -9,7 +9,7 @@ defmodule Peers.Messages do
   #         TCP
   # ----------------------
   def build_handshake(info_hash) do
-    peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
+    peer_id = <<"-EX0001-">> <> :crypto.strong_rand_bytes(12)
 
     <<byte_size(@pstr)::8, @pstr::bytes, 0::64, info_hash::binary-size(20), peer_id::binary>>
   end
@@ -24,7 +24,7 @@ defmodule Peers.Messages do
   end
 
   def http_connection_req(torrent, uri, port \\ 6881) do
-    peer_id = "-EX0001-" <> :crypto.strong_rand_bytes(12)
+    peer_id = <<"-EX0001-">> <> :crypto.strong_rand_bytes(12)
     encoded_peer_id = url_encode_raw(peer_id)
     encoded_info_hash = url_encode_raw(torrent.info_hash)
 
@@ -41,7 +41,7 @@ defmodule Peers.Messages do
       ]
       |> Enum.join("&")
 
-    "#{uri.scheme}://#{uri.authority}#{uri.path}?#{query}"
+    "#{uri.scheme}://#{uri.host}:#{uri.port}#{uri.path}?#{query}"
   end
 
   # ----------------------
