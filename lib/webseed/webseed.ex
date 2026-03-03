@@ -2,24 +2,17 @@ defmodule Exorrent.Webseed do
   alias Webseed.Worker
   require Logger
 
+  @max_workers 6
+
   def handle_webseeds(torrent) do
     torrent.urls
     |> init_workers(torrent)
   end
 
   def init_workers(urls, torrent) do
-    [url | rest] = urls
-    [url2 | rest] = rest
-    [url3 | rest] = rest
-    [url4 | rest] = rest
-    [url5 | _rest] = rest
-    init_worker(url, torrent)
-    init_worker(url2, torrent)
-    init_worker(url3, torrent)
-    init_worker(url4, torrent)
-    init_worker(url5, torrent)
-    # urls
-    # |> Enum.each(fn url -> init_worker(url, torrent) end)
+    urls
+    |> Enum.take(@max_workers)
+    |> Enum.each(fn url -> init_worker(url, torrent) end)
   end
 
   def init_worker(url, torrent) do
