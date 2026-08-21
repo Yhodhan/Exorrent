@@ -22,6 +22,7 @@ defmodule Exorrent.MixProject do
   defp deps do
     [
       {:bencoder, github: "Yhodhan/Bencoder", branch: "master"},
+      {:exalia, github: "Yhodhan/Exalia", branch: "master"}
     ]
   end
 end
