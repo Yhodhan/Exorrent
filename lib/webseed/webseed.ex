@@ -1,6 +1,5 @@
 defmodule Exorrent.Webseed do
   alias Webseed.Worker
-  require Logger
 
   @max_workers 6
 
