@@ -1,9 +1,14 @@
 defmodule Peers.PeerConnection do
   alias Peers.Worker
+  alias Peers.Messages
 
   require Logger
 
   @pstr "BitTorrent protocol"
+
+  # -----------------------
+  #  Outbound connections
+  # -----------------------
 
   def peer_connect(peer) do
     {ip, port} = peer
@@ -59,6 +64,27 @@ defmodule Peers.PeerConnection do
   def terminate_connection(socket) do
     Logger.info("=== Terminating connection to socket: #{inspect(socket)} ===")
     :gen_tcp.close(socket)
+  end
+
+  # -----------------------
+  #  inbound connections
+  # -----------------------
+
+  def read_handshake(socket) do
+    with {:ok, <<len::8>>} <- :gen_tcp.recv(socket, 1),
+         {:ok, pstr} <- :gen_tcp.recv(socket, len),
+         {:ok, _reserved} <- :gen_tcp.recv(socket, 8),
+         {:ok, info_hash} <- :gen_tcp.recv(socket, 20) do
+      case pstr do
+        @pstr -> {:ok, info_hash}
+        _ -> :error
+      end
+    end
+  end
+
+  def send_handshake_reply(socket, info_hash) do
+    msg = Messages.build_handshake(info_hash)
+    send_handshake(socket, msg)
   end
 
   # ---------------------
