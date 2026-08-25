@@ -1,7 +1,7 @@
 defmodule Peers.Worker do
   alias Peers.Messages
   alias Exorrent.PieceManager
-  alias Peers.PeerManager
+  alias Exorrent.DiskManager
 
   use GenServer
   require Logger
@@ -59,11 +59,10 @@ defmodule Peers.Worker do
 
   # --------------------------------------------------
 
-  def handle_info(:cycle, %{status: :idle, interested: true, bitfield: true} = state) do
+  def handle_info(:cycle, %{status: :idle, interested: true, has_bitfield?: true} = state) do
     Process.send_after(self(), :cycle, 2)
 
-    with {:ok, piece} <- PeerManager.request_work(self()),
-         :miss <- PieceManager.status(piece) do
+    with {:ok, piece} <- PieceManager.request_work_bitmap(state.bitmap) do
       {:ok, state} = prepare_request(piece, state)
 
       {:noreply, state, {:continue, :downloading}}
@@ -84,9 +83,9 @@ defmodule Peers.Worker do
   # --------------------------------------------------
 
   def handle_info(
-        :cycle,
-        %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
-      ) do
+       :cycle,
+       %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
+     ) do
     # download piece
     cond do
       not :queue.is_empty(blocks_list) ->
@@ -237,9 +236,8 @@ defmodule Peers.Worker do
   def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
       bitmap = Messages.make_bitfield(bitfield, total_pieces)
-      PeerManager.store_bitfield(self(), bitmap)
 
-      {:ok, %{state | status: :idle, interested: true}}
+      {:ok, %{state | status: :idle, interested: true, bitmap: bitmap, has_bitfield?: true}}
     end
   end
 
@@ -307,6 +305,7 @@ defmodule Peers.Worker do
   def prepare_request(piece_index, state) do
     Logger.debug("=== preparing request piece_index: #{inspect(piece_index)} ===")
     blocks_list = PieceManager.blocks_list(piece_index)
+    PieceManager.update_status(piece_index, :downloading)
 
     {:ok, %{state | status: :downloading, requested: {piece_index, blocks_list}}}
   end

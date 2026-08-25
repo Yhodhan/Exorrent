@@ -53,9 +53,11 @@ defmodule Exorrent.PieceManager do
   def update_status(piece_index, status),
     do: GenServer.call(__MODULE__, {:update_status, piece_index, status})
 
-  # This is used by the webseeds since they dont have a bitfield or Have messages.
   def request_work(),
     do: GenServer.call(__MODULE__, :request_work)
+
+  def request_work_bitmap(bitmap),
+    do: GenServer.call(__MODULE__, {:request_work_bitmap, bitmap})
 
   # ----------------------
   #   GenServer functions
@@ -187,6 +189,24 @@ defmodule Exorrent.PieceManager do
 
       _ ->
         {:reply, {:none, nil}, pieces_state}
+    end
+  end
+
+  def handle_call({:request_work_bitmap, bitmap}, _from, pieces_state) do
+    # get the first piece of the bitmap that is missing
+    statuses = pieces_state.pieces_status
+
+    index =
+      bitmap
+      |> Enum.map(fn piece -> parse_value(piece) end)
+      |> Enum.find(fn piece -> statuses[piece] == :miss end)
+
+    case index do
+      nil ->
+        {:reply, {:none, nil}, pieces_state}
+
+      piece ->
+        {:reply, {:ok, piece}, pieces_state}
     end
   end
 

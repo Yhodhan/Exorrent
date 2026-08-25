@@ -16,6 +16,7 @@ defmodule Exorrent.Webseed do
 
   def init_worker(url, torrent) do
     state = %{url: url, torrent: torrent}
-    {:ok, _pid} = Worker.start_link(state)
+    sup = Exorrent.TorrentSession.webseed_sup_name(torrent.info_hash)
+    DynamicSupervisor.start_child(sup, {Worker, state})
   end
 end

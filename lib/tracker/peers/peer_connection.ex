@@ -102,11 +102,12 @@ defmodule Peers.PeerConnection do
       choke: true,
       unchoked: false,
       interested: false,
-      bitfield: false,
+      has_bitfield?: false,
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
       requested: nil,
-      pieces_list: torrent.pieces_list
+      pieces_list: torrent.pieces_list,
+      bitfield: %{}
     }
   end
 end

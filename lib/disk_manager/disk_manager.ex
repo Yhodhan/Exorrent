@@ -1,4 +1,4 @@
-defmodule DiskManager do
+defmodule Exorrent.DiskManager do
   use GenServer
 
   require Logger

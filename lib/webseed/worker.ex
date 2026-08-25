@@ -2,6 +2,8 @@ defmodule Webseed.Worker do
   use GenServer
   require Logger
 
+  alias Exorrent.DiskManager
+
   @moduledoc """
     This module handles the worker logics, which deals with the messages that are sent to the  
     server seeds. 
@@ -43,6 +45,7 @@ defmodule Webseed.Worker do
 
     case PieceManager.request_work() do
       {:ok, piece_index} ->
+        PieceManager.update_status(piece_index, :downloading)
         handle_piece(url, piece_index, state)
 
       {:none, _} ->
