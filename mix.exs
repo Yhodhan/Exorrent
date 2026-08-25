@@ -14,14 +14,14 @@ defmodule Exorrent.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      extra_applications: [:logger, :inets, :ssl]
+      extra_applications: [:logger, :inets, :ssl],
+      mod: {Exorrent.Application, []}
     ]
   end
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:bencoder, github: "Yhodhan/Bencoder", branch: "master"},
       {:exalia, github: "Yhodhan/Exalia", branch: "master"}
     ]
   end

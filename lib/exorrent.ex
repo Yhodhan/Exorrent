@@ -1,8 +1,5 @@
 defmodule Exorrent do
   alias Exorrent.Torrent
-  alias Exorrent.Tracker
-  alias Exorrent.Webseed
-  alias Exorrent.PieceManager
 
   require Logger
 
@@ -11,27 +8,9 @@ defmodule Exorrent do
   # ---------------------------------------------------
 
   def init() do
-    Process.flag(:trap_exit, true)
-
-    :inets.start()
-    :ssl.start()
-
+    Logger.info("=== Init torrent ===")
     {:ok, torrent} = Torrent.read_torrent(@torrent)
-
-    # ------------------
-    #    Piece manager
-    # ------------------
-    {:ok, _pid} = PieceManager.start_link(torrent)
-
-    # ------------------
-    #    Disk manager
-    # ------------------
-    {:ok, _pid} = DiskManager.start_link(torrent)
-
-    case torrent.type do
-      :trackers -> Tracker.handle_trackers(torrent)
-      :webseeds -> Webseed.handle_webseeds(torrent)
-    end
+    Exorrent.TorrentSupervisor.start_torrent(torrent)
   end
 
   # -------------------

@@ -7,7 +7,7 @@ defmodule Exorrent.Application do
     children = [
       {Registry, keys: :unique, name: Exorrent.TorrentRegistry},
       {Exorrent.TorrentSupervisor, []},
-      {DynamicSupervisor, name: Exorrent.TorrentSupervisor, strategy: :one_for_one},
+      {DynamicSupervisor, name: Exorrent.InboundPeerSupervisor, strategy: :one_for_one},
       {Exorrent.Listener, port: 6881}
     ]
 

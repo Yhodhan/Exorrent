@@ -15,7 +15,7 @@ defmodule Exorrent.InfoHash do
 
   # Extract full bencoded dictionary starting at given offset
   defp extract_dictionary(binary, start_pos) do
-    <<_::binary-size(start_pos), rest::binary>> = binary
+    <<_::binary-size(^start_pos), rest::binary>> = binary
 
     do_extract(rest, 0, 0)
   end
@@ -35,7 +35,7 @@ defmodule Exorrent.InfoHash do
 
   defp do_extract(<<"e", rest::binary>>, 1, size) do
     total_size = size + 1
-    <<info::binary-size(total_size), _::binary>> = <<?d, rest::binary>>
+    <<info::binary-size(^total_size), _::binary>> = <<?d, rest::binary>>
     info
   end
 
@@ -54,7 +54,7 @@ defmodule Exorrent.InfoHash do
     {len_str, <<":", rest::binary>>} = take_until(binary, ?:)
     len = String.to_integer(len_str)
 
-    <<_str::binary-size(len), rest2::binary>> = rest
+    <<_str::binary-size(^len), rest2::binary>> = rest
 
     consumed =
       byte_size(len_str) + 1 + len
@@ -64,7 +64,7 @@ defmodule Exorrent.InfoHash do
 
   defp take_until(binary, delimiter) do
     {pos, _} = :binary.match(binary, <<delimiter>>)
-    <<part::binary-size(pos), rest::binary>> = binary
+    <<part::binary-size(^pos), rest::binary>> = binary
     {part, rest}
   end
 end
