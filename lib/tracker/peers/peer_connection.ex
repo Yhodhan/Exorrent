@@ -107,7 +107,7 @@ defmodule Peers.PeerConnection do
       piece_length: torrent.piece_length,
       requested: nil,
       pieces_list: torrent.pieces_list,
-      bitfield: %{}
+      bitmap: %{}
     }
   end
 end

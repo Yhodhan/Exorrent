@@ -17,6 +17,7 @@ defmodule Exorrent.TorrentSession do
       {Exorrent.PieceManager, torrent},
       {Exorrent.DiskManager, torrent},
       {DynamicSupervisor, name: peer_sup_name(torrent.info_hash), strategy: :one_for_one},
+      {DynamicSupervisor, name: webseed_sup_name(torrent.info_hash), strategy: :one_for_one}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)
