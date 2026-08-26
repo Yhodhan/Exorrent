@@ -8,7 +8,8 @@ defmodule Exorrent.PieceManager do
     Manager of pieces
 
     It keeps two dictionaries one whose keys are the piece indexes and 
-    and the block indexes: 
+    and t
+  he block indexes: 
 
     %{
      piece_index => %{
@@ -47,8 +48,8 @@ defmodule Exorrent.PieceManager do
   def get_if_available(piece_index, offset),
     do: GenServer.call(__MODULE__, {:available, piece_index, offset})
 
-  def validate_piece(piece_index),
-    do: GenServer.call(__MODULE__, {:validate_piece, piece_index})
+  def validate_piece(piece_index, type),
+    do: GenServer.call(__MODULE__, {:validate_piece, piece_index, type})
 
   def update_status(piece_index, status),
     do: GenServer.call(__MODULE__, {:update_status, piece_index, status})
@@ -68,8 +69,7 @@ defmodule Exorrent.PieceManager do
         blocks: blocks,
         piece_length: piece_length,
         size: size,
-        pieces_list: pieces_list,
-        type: type
+        pieces_list: pieces_list
       }) do
     Logger.info("=== Init Piece Manager ===")
     # create dictionary
@@ -91,8 +91,7 @@ defmodule Exorrent.PieceManager do
       pieces_map: pieces_map,
       pieces_status: pieces_status,
       pieces_list: pieces_list,
-      piece_length: piece_length,
-      type: type
+      piece_length: piece_length
     }
 
     {:ok, pieces_state}
@@ -166,8 +165,8 @@ defmodule Exorrent.PieceManager do
   # --------------------------------------------------
   #         Validate a block against its hash 
   # --------------------------------------------------
-  def handle_call({:validate_piece, piece_index}, _from, pieces_state) do
-    case pieces_state.type do
+  def handle_call({:validate_piece, piece_index, type}, _from, pieces_state) do
+    case type do
       :webseeds ->
         {:reply, validate_piece(piece_index, pieces_state.pieces_list), pieces_state}
 
@@ -182,6 +181,7 @@ defmodule Exorrent.PieceManager do
     case Enum.find(statuses, fn {_k, v} -> v == :miss end) do
       {piece_index, _status} ->
         # change status to downloading
+        # NOTE: check this is actually needed
         new_stats = Map.put(statuses, piece_index, :downloading)
         pieces_state = Map.put(pieces_state, :pieces_status, new_stats)
 
@@ -306,10 +306,10 @@ defmodule Exorrent.PieceManager do
       |> Map.values()
 
     piece = unify_blocks(blocks)
-    validate_piece(piece, pieces_list)
+    validation(piece, pieces_list)
   end
 
-  defp validate_piece(piece, pieces_list) do
+  defp validation(piece, pieces_list) do
     hash = :crypto.hash(:sha, piece)
 
     if MapSet.member?(pieces_list, hash),

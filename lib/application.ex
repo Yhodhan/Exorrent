@@ -8,7 +8,8 @@ defmodule Exorrent.Application do
       {Registry, keys: :unique, name: Exorrent.TorrentRegistry},
       {Exorrent.TorrentSupervisor, []},
       {DynamicSupervisor, name: Exorrent.InboundPeerSupervisor, strategy: :one_for_one},
-      {Exorrent.Listener, port: 6881}
+      {Exorrent.Listener, port: 6881},
+      {Task.Supervisor, name: Exorrent.TaskSupervisor}
     ]
 
     Supervisor.start_link(children, strategy: :one_for_one, name: Exorrent.Supervisor)

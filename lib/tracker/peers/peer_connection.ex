@@ -1,6 +1,7 @@
 defmodule Peers.PeerConnection do
   alias Peers.Worker
   alias Peers.Messages
+  alias Exorrent.TorrentSession
 
   require Logger
 
@@ -24,12 +25,14 @@ defmodule Peers.PeerConnection do
     end
   end
 
+  # -----------------------------------------------------------------------------------------------
   def send_handshake(socket, msg) do
     Logger.info("=== Sending msg to socket: #{inspect(socket)} ===")
 
     :gen_tcp.send(socket, msg)
   end
 
+  # -----------------------------------------------------------------------------------------------
   def handshake_response(socket, info_hash) do
     Logger.info("=== Reading data from socket: #{inspect(socket)} ===")
 
@@ -44,23 +47,33 @@ defmodule Peers.PeerConnection do
     end
   end
 
+  # -----------------------------------------------------------------------------------------------
   def complete_handshake(socket, torrent) do
     Logger.info("=== Completing handshake ===")
 
     case :gen_tcp.recv(socket, 20) do
       {:ok, peer_id} ->
         peer_state = peer_state(socket, peer_id, torrent)
+        sup = TorrentSession.peer_sup_name(torrent.info_hash)
 
-        {:ok, worker_pid} = Worker.start_link(peer_state)
-        :gen_tcp.controlling_process(socket, worker_pid)
+        # Init supervised Worker
+        case DynamicSupervisor.start_child(sup, {Worker, peer_state}) do
+          {:ok, worker_pid} ->
+            :ok = :gen_tcp.controlling_process(socket, worker_pid)
+            {:ok, worker_pid}
 
-        {:ok, worker_pid}
+          {:error, reason} ->
+            Logger.error("=== Failed to start peer worker: #{inspect(reason)} ===")
+            :gen_tcp.close(socket)
+            :error
+        end
 
       _ ->
         :error
     end
   end
 
+  # -----------------------------------------------------------------------------------------------
   def terminate_connection(socket) do
     Logger.info("=== Terminating connection to socket: #{inspect(socket)} ===")
     :gen_tcp.close(socket)

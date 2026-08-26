@@ -37,7 +37,7 @@ defmodule Exorrent.Tracker do
       Worker.init_cycle(worker_pid)
     else
       error ->
-        Logger.error("=== Error while connecting peer reason: #{error} ===")
+        Logger.error("=== Error while connecting peer reason: #{inspect(error)} ===")
     end
   end
 
@@ -58,7 +58,7 @@ defmodule Exorrent.Tracker do
 
   def get_peers(torrent) do
     peers =
-      torrent.urls
+      torrent.trackers
       |> Enum.flat_map(fn tr -> request(tr, torrent) end)
       |> Enum.uniq()
 

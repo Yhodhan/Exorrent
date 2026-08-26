@@ -21,7 +21,9 @@ defmodule Tracker.HttpTracker do
   def http_message(url) do
     Logger.info("=== Sending tcp message to #{url} ===")
 
-    case :httpc.request(:get, {to_charlist(url), []}, [], body_format: :binary) do
+    headers = [{~c"User-Agent", ~c"Transmission/4.0.5"}]
+
+    case :httpc.request(:get, {to_charlist(url), headers}, [], body_format: :binary) do
       {:ok, {{_, 200, _}, _headers, body}} ->
         {:ok, body}
 

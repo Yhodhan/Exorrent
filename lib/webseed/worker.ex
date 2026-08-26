@@ -58,7 +58,7 @@ defmodule Webseed.Worker do
     %{piece_length: length, size: size} = state.torrent
 
     with {:ok, data} <- fetch_piece(url, piece_index, length, size),
-         {:ok, piece} <- PieceManager.validate_piece(data),
+         {:ok, piece} <- PieceManager.validate_piece(data, :webseeds),
          :ok <- DiskManager.write_piece(piece_index, piece) do
       PieceManager.update_status(piece_index, :done)
 

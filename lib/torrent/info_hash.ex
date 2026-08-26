@@ -13,52 +13,29 @@ defmodule Exorrent.InfoHash do
     end
   end
 
-  # Extract full bencoded dictionary starting at given offset
   defp extract_dictionary(binary, start_pos) do
     <<_::binary-size(^start_pos), rest::binary>> = binary
-
-    do_extract(rest, 0, 0)
+    len = do_extract(rest, 0, 0)
+    binary_part(rest, 0, len)
   end
 
-  # Walk through the binary counting nested dictionaries/lists
-  defp do_extract(<<"d", rest::binary>>, 0, size) do
-    do_extract(rest, 1, size + 1)
-  end
+  defp do_extract(<<"d", rest::binary>>, 0, size), do: do_extract(rest, 1, size + 1)
+  defp do_extract(<<"d", rest::binary>>, depth, size), do: do_extract(rest, depth + 1, size + 1)
+  defp do_extract(<<"l", rest::binary>>, depth, size), do: do_extract(rest, depth + 1, size + 1)
+  defp do_extract(<<"e", _rest::binary>>, 1, size), do: size + 1
+  defp do_extract(<<"e", rest::binary>>, depth, size), do: do_extract(rest, depth - 1, size + 1)
 
-  defp do_extract(<<"d", rest::binary>>, depth, size) do
-    do_extract(rest, depth + 1, size + 1)
-  end
-
-  defp do_extract(<<"l", rest::binary>>, depth, size) do
-    do_extract(rest, depth + 1, size + 1)
-  end
-
-  defp do_extract(<<"e", rest::binary>>, 1, size) do
-    total_size = size + 1
-    <<info::binary-size(^total_size), _::binary>> = <<?d, rest::binary>>
-    info
-  end
-
-  defp do_extract(<<"e", rest::binary>>, depth, size) do
-    do_extract(rest, depth - 1, size + 1)
-  end
-
-  # integer
   defp do_extract(<<"i", rest::binary>>, depth, size) do
-    {_, rest2} = take_until(rest, ?e)
-    do_extract(rest2, depth, size + byte_size(rest) - byte_size(rest2) + 1)
+    {digits, after_digits} = take_until(rest, ?e)
+    <<"e", rest2::binary>> = after_digits
+    do_extract(rest2, depth, size + 1 + byte_size(digits) + 1)
   end
 
-  # string
   defp do_extract(binary, depth, size) do
     {len_str, <<":", rest::binary>>} = take_until(binary, ?:)
     len = String.to_integer(len_str)
-
     <<_str::binary-size(^len), rest2::binary>> = rest
-
-    consumed =
-      byte_size(len_str) + 1 + len
-
+    consumed = byte_size(len_str) + 1 + len
     do_extract(rest2, depth, size + consumed)
   end
 

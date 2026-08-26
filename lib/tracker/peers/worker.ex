@@ -83,9 +83,9 @@ defmodule Peers.Worker do
   # --------------------------------------------------
 
   def handle_info(
-       :cycle,
-       %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
-     ) do
+        :cycle,
+        %{status: :downloading, socket: socket, requested: {piece_index, blocks_list}} = state
+      ) do
     # download piece
     cond do
       not :queue.is_empty(blocks_list) ->
@@ -101,7 +101,7 @@ defmodule Peers.Worker do
         {:noreply, state, {:continue, :downloading}}
 
       true ->
-        case PieceManager.validate_piece(piece_index) do
+        case PieceManager.validate_piece(piece_index, :trackers) do
           {:ok, verified_piece} ->
             Logger.debug("=== Verified piece ===")
 
