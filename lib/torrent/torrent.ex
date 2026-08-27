@@ -14,7 +14,7 @@ defmodule Exorrent.Torrent do
     :trackers,
     :total_pieces,
     :piece_length,
-    :pieces_list,
+    :hashes,
     :blocks
   ]
 
@@ -25,7 +25,7 @@ defmodule Exorrent.Torrent do
          {:ok, urls} <- get_webseeds(torr),
          {:ok, trackers} <- get_trackers(torr),
          {:ok, piece_length} <- piece_length(torr),
-         {:ok, pieces_list} <- get_pieces_list(torr),
+         {:ok, hashes} <- get_hashes(torr),
          size <- size(torr) do
       {:ok,
        %__MODULE__{
@@ -36,7 +36,7 @@ defmodule Exorrent.Torrent do
          trackers: trackers,
          total_pieces: amount_pieces(torr),
          piece_length: piece_length,
-         pieces_list: MapSet.new(pieces_list),
+         hashes: MapSet.new(hashes),
          blocks: blocks(piece_length)
        }}
     else
@@ -64,7 +64,7 @@ defmodule Exorrent.Torrent do
 
   # ---------------------------------------------------
 
-  def get_pieces_list(%{"info" => info}) do
+  def get_hashes(%{"info" => info}) do
     {:ok,
      info["pieces"]
      |> pieces_hashes()}

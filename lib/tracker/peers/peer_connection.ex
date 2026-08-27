@@ -119,7 +119,7 @@ defmodule Peers.PeerConnection do
       total_pieces: torrent.total_pieces,
       piece_length: torrent.piece_length,
       requested: nil,
-      pieces_list: torrent.pieces_list,
+      hashes: torrent.hashes,
       bitmap: %{}
     }
   end
