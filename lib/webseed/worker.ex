@@ -5,8 +5,8 @@ defmodule Webseed.Worker do
   alias Exorrent.DiskManager
 
   @moduledoc """
-    This module handles the worker logics, which deals with the messages that are sent to the  
-    server seeds. 
+    This module handles the worker logics, which deals with the messages that are sent to the
+    server seeds.
   """
   alias Exorrent.PieceManager
 
@@ -58,7 +58,7 @@ defmodule Webseed.Worker do
     %{piece_length: length, size: size} = state.torrent
 
     with {:ok, data} <- fetch_piece(url, piece_index, length, size),
-         {:ok, piece} <- PieceManager.validate_piece(data, :webseeds),
+         {:ok, piece} <- PieceManager.validate_piece({piece_index, data}),
          :ok <- DiskManager.write_piece(piece_index, piece) do
       PieceManager.update_status(piece_index, :done)
 

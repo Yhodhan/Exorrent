@@ -3,7 +3,7 @@ defmodule Exorrent do
 
   require Logger
 
-  @torrent "torrents/ubuntu.torrent"
+  @torrent "torrents/archlinux.torrent"
 
   # ---------------------------------------------------
 

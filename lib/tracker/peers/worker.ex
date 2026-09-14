@@ -101,7 +101,7 @@ defmodule Peers.Worker do
         {:noreply, state, {:continue, :downloading}}
 
       true ->
-        case PieceManager.validate_piece(piece_index, :trackers) do
+        case PieceManager.validate_piece(piece_index) do
           {:ok, verified_piece} ->
             Logger.debug("=== Verified piece ===")
 

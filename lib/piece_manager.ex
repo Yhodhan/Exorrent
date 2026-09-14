@@ -40,8 +40,8 @@ defmodule Exorrent.PieceManager do
   def get_if_available(piece_index, offset),
     do: GenServer.call(__MODULE__, {:available, piece_index, offset})
 
-  def validate_piece(piece_index, type),
-    do: GenServer.call(__MODULE__, {:validate_piece, piece_index, type})
+  def validate_piece(piece),
+    do: GenServer.call(__MODULE__, {:validate_piece, piece})
 
   def update_status(piece_index, status),
     do: GenServer.call(__MODULE__, {:update_status, piece_index, status})
@@ -130,21 +130,26 @@ defmodule Exorrent.PieceManager do
   # --------------------------------------------------
   #         Validate a block against its hash
   # --------------------------------------------------
-  def handle_call({:validate_piece, piece_index, _type}, _from, pieces_state) do
+  def handle_call({:validate_piece, piece}, _from, pieces_state) do
     # is from webseed
-    if is_binary(piece_index) and byte_size(piece_index) > 20 do
-      validation(piece_index, pieces_state.hashes)
-    else
-      index = parse_value(piece_index)
-      # offset = parse_value(offset)
-      case validate(index, pieces_state) do
-        {:ok, piece} ->
-          updated_map = update_bitmap(pieces_state.bitmap, index)
-          {:reply, {:ok, piece}, %{pieces_state | bitmap: updated_map}}
+    response =
+      case piece do
+        {piece_index, piece} ->
+          index = parse_value(piece_index)
+          {index, validation(piece, pieces_state.hashes)}
 
-        {:error, piece} ->
-          {:reply, {:error, piece}, pieces_state}
+        piece_index ->
+          index = parse_value(piece_index)
+          {index, validate(index, pieces_state)}
       end
+
+    case response do
+      {index, {:ok, piece}} ->
+        updated_map = update_bitmap(pieces_state.bitmap, index)
+        {:reply, {:ok, piece}, %{pieces_state | bitmap: updated_map}}
+
+      {_, {:error, piece}} ->
+        {:reply, {:error, piece}, pieces_state}
     end
   end
 
