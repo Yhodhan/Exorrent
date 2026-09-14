@@ -8,7 +8,6 @@ defmodule Exorrent.DHT do
   def new_node(),
     do: Exalia.new_node()
 
-  # bootstrap exalia
   def bootstrap() do
     {:ok, pid, id} = Exalia.bootstrap()
 
@@ -28,6 +27,11 @@ defmodule Exorrent.DHT do
     IO.inspect(peers, label: "peers")
 
     Tracker.init_workers(torrent, peers)
+  end
+
+  def announce(torrent) do
+    port = Application.get_env(:exorrent, :torrent_port)
+    Exalia.announce_peer(torrent.info_hash, port)
   end
 
   # ------------------------

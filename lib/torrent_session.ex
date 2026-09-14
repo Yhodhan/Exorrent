@@ -44,11 +44,12 @@ defmodule Exorrent.TorrentSession do
     Task.Supervisor.start_child(Exorrent.TaskSupervisor, fn ->
       {:ok, pid, _id} = Exorrent.DHT.bootstrap()
       Exorrent.DHT.find_peers_and_connect(pid, t)
+      Exorrent.DHT.announce(t)
     end)
   end
 
   # ---------------------------------
-  #            Init Trackers 
+  #            Init Trackers
   # ---------------------------------
   defp peer_source_child(t) do
     if t.urls != [], do: Exorrent.Webseed.handle_webseeds(t)
