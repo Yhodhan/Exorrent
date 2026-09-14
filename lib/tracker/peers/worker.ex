@@ -184,10 +184,10 @@ defmodule Peers.Worker do
   4 - HAVE
   5 - BITFIELD
   6 - BLOCK
-  7 - PIECE 
+  7 - PIECE
   """
   # ------------------------------------------------------------------------
-  #                                   CHOKE 
+  #                                   CHOKE
   # ------------------------------------------------------------------------
   def process_message(0, _len, state) do
     Logger.info("=== choked message ===")
@@ -195,7 +195,7 @@ defmodule Peers.Worker do
   end
 
   # ------------------------------------------------------------------------
-  #                                   UNCHOKE 
+  #                                   UNCHOKE
   # ------------------------------------------------------------------------
   def process_message(1, _len, state) do
     Logger.info("=== unchoked message ===")
@@ -203,7 +203,7 @@ defmodule Peers.Worker do
   end
 
   # ------------------------------------------------------------------------
-  #                                 NOT INTERESTED 
+  #                                 NOT INTERESTED
   # ------------------------------------------------------------------------
   def process_message(3, _len, state) do
     Logger.info("=== not interested message ===")
@@ -211,7 +211,7 @@ defmodule Peers.Worker do
   end
 
   # ------------------------------------------------------------------------
-  #                                     HAVE 
+  #                                     HAVE
   # ------------------------------------------------------------------------
   def process_message(4, len, %{socket: socket} = state) do
     with {:ok, piece_index} <- :gen_tcp.recv(socket, len) do
@@ -231,22 +231,20 @@ defmodule Peers.Worker do
   end
 
   # ------------------------------------------------------------------------
-  #                                BITFIELD 
+  #                                BITFIELD
   # ------------------------------------------------------------------------
-  def process_message(5, len, %{socket: socket, total_pieces: total_pieces} = state) do
+  def process_message(5, len, %{socket: socket} = state) do
     with {:ok, bitfield} <- :gen_tcp.recv(socket, len) do
-      bitmap = Messages.make_bitfield(bitfield, total_pieces)
-
-      {:ok, %{state | status: :idle, interested: true, bitmap: bitmap, has_bitfield?: true}}
+      {:ok, %{state | status: :idle, interested: true, bitmap: bitfield, has_bitfield?: true}}
     end
   end
 
   # ------------------------------------------------------------------------
-  #                              REQUEST BLOCK 
+  #                              REQUEST BLOCK
   # ------------------------------------------------------------------------
 
   # NOTE: this function is intended to be used when the client is ready to accept incoming connections
-  # IT should check whether the client actually has the block and send it to the requester 
+  # IT should check whether the client actually has the block and send it to the requester
   def process_message(6, len, %{socket: socket, piece_length: piece_lenght} = state) do
     with {:ok, <<index::32>>} <- :gen_tcp.recv(socket, 4),
          {:ok, <<begin::32>>} <- :gen_tcp.recv(socket, 4),
@@ -269,7 +267,7 @@ defmodule Peers.Worker do
   end
 
   # ------------------------------------------------------------------------
-  #                                 PIECE 
+  #                                 PIECE
   # ------------------------------------------------------------------------
   def process_message(7, len, %{socket: socket, requested: {piece_index, block_list}} = state) do
     with {:ok, <<index::32>>} <- :gen_tcp.recv(socket, 4),

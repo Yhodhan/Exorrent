@@ -11,7 +11,6 @@ defmodule Exorrent.PieceManager do
     :hashes,
     :bitmap,
     :piece_length,
-    # %{piece_index => %{blocks_received: bitfield_or_mapset, buffer: <<>>}} — small, bounded working set
     :downloading,
     :size,
     :total_blocks,
@@ -116,7 +115,7 @@ defmodule Exorrent.PieceManager do
   end
 
   # --------------------------------------------------
-  #      Tells when a piece is available to share 
+  #      Tells when a piece is available to share
   # --------------------------------------------------
   def handle_call({:available, piece_index, _offset}, _from, pieces_state) do
     index = parse_value(piece_index)
@@ -129,18 +128,23 @@ defmodule Exorrent.PieceManager do
   end
 
   # --------------------------------------------------
-  #         Validate a block against its hash 
+  #         Validate a block against its hash
   # --------------------------------------------------
   def handle_call({:validate_piece, piece_index, _type}, _from, pieces_state) do
-    index = parse_value(piece_index)
-    # offset = parse_value(offset)
-    case validate(index, pieces_state) do
-      {:ok, piece} ->
-        updated_map = update_bitmap(pieces_state.bitmap, index)
-        {:reply, {:ok, piece}, %{pieces_state | bitmap: updated_map}}
+    # is from webseed
+    if is_binary(piece_index) and byte_size(piece_index) > 20 do
+      validation(piece_index, pieces_state.hashes)
+    else
+      index = parse_value(piece_index)
+      # offset = parse_value(offset)
+      case validate(index, pieces_state) do
+        {:ok, piece} ->
+          updated_map = update_bitmap(pieces_state.bitmap, index)
+          {:reply, {:ok, piece}, %{pieces_state | bitmap: updated_map}}
 
-      {:error, piece} ->
-        {:reply, {:error, piece}, pieces_state}
+        {:error, piece} ->
+          {:reply, {:error, piece}, pieces_state}
+      end
     end
   end
 
@@ -172,7 +176,7 @@ defmodule Exorrent.PieceManager do
     end
   end
 
-  # maybe this functions is not needed anymore 
+  # maybe this functions is not needed anymore
   def handle_call({:update_status, _piece_index, _status}, _from, pieces_state) do
     {:reply, :ok, pieces_state}
   end
@@ -182,7 +186,7 @@ defmodule Exorrent.PieceManager do
   # --------------------------------------------------
 
   # --------------------------------------------------
-  #        Obtain the block map from a piece 
+  #        Obtain the block map from a piece
   # --------------------------------------------------
   def get_index_block_map(piece_index, pieces_state) do
     index = parse_value(piece_index)
@@ -198,7 +202,7 @@ defmodule Exorrent.PieceManager do
   end
 
   # --------------------------------------------------
-  #    Build the block request list for a peer 
+  #    Build the block request list for a peer
   # --------------------------------------------------
   defp build_block_map(piece_index, total_pieces, piece_length, blocks, size) do
     num_blocks =
