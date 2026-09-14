@@ -75,8 +75,6 @@ defmodule Peers.Worker do
   # --------------------------------------------------
 
   def handle_info(:cycle, %{socket: socket, status: :idle, interested: true} = state) do
-    Logger.info("=== Worker Cycle ===")
-
     receive_message(socket, state)
   end
 
@@ -275,7 +273,6 @@ defmodule Peers.Worker do
          {:ok, <<block::binary>>} <- :gen_tcp.recv(socket, len - 8) do
       Logger.debug("=== Block obtained ===")
 
-      IO.inspect(len, label: "Len of the block")
       IO.inspect(index, label: "index block")
       IO.inspect(Integer.floor_div(begin, @block_size), label: "Begin block index")
 
@@ -321,7 +318,6 @@ defmodule Peers.Worker do
         {:noreply, state}
 
       {:error, :timeout} ->
-        Logger.debug("=== Reponse timeout, retry ===")
         Process.send_after(self(), :cycle, 100)
         {:noreply, state}
 

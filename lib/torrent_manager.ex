@@ -1,4 +1,4 @@
-defmodule Exalia.TorrentManager do
+defmodule Exorrent.TorrentManager do
   use GenServer
 
   require Logger
@@ -28,7 +28,7 @@ defmodule Exalia.TorrentManager do
     schedule_dht_announce()
     schedule_worker_discovery()
 
-    {:ok, %{state | pid: pid}}
+    {:noreply, Map.put(state, :pid, pid)}
   end
 
   def handle_info(:workers_discovery, %{pid: pid, torrent: t} = state) do
@@ -68,5 +68,5 @@ defmodule Exalia.TorrentManager do
     do: Process.send_after(self(), :announce, @announce_interval)
 
   def schedule_worker_discovery(),
-    do: Process.send_after(self(), :init_workers, @workers_discovery)
+    do: Process.send_after(self(), :workers_discovery, @workers_discovery)
 end
