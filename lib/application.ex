@@ -4,6 +4,19 @@ defmodule Exorrent.Application do
   def start(_type, _args) do
     Process.flag(:trap_exit, true)
 
+    :logger.add_primary_filter(:silence_dependency, {
+      fn log_event, _extra ->
+        case log_event do
+          %{meta: %{application: :exalia}} ->
+            :stop
+
+          _ ->
+            :ignore
+        end
+      end,
+      []
+    })
+
     port = Application.get_env(:exorrent, :torrent_port)
 
     children = [

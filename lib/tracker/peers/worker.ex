@@ -109,9 +109,11 @@ defmodule Peers.Worker do
             :ok = DiskManager.write_piece(piece_index, verified_piece)
 
             Logger.debug("=== Done keep cycle ===")
+
+            PieceManager.remove_from_download(piece_index)
             # Keep cycle
             # Fetch next bitfield index
-            Process.send_after(self(), :cycle, 2)
+            Process.send_after(self(), :cycle, 10)
             {:noreply, %{state | status: :idle}}
 
           _error ->
@@ -149,14 +151,14 @@ defmodule Peers.Worker do
 
       case process_message(id, len, state) do
         {:block_obtained, state} ->
-          Process.send_after(self(), :cycle, 5)
+          Process.send_after(self(), :cycle, 10)
           {:noreply, state}
 
         {:downloading, state} ->
           {:noreply, state, {:continue, :downloading}}
 
         {:ok, state} ->
-          Process.send_after(self(), :cycle, 5)
+          Process.send_after(self(), :cycle, 10)
           {:noreply, state}
       end
     else
@@ -300,7 +302,6 @@ defmodule Peers.Worker do
   def prepare_request(piece_index, state) do
     Logger.debug("=== preparing request piece_index: #{inspect(piece_index)} ===")
     blocks_list = PieceManager.blocks_list(piece_index)
-    PieceManager.update_status(piece_index, :downloading)
 
     {:ok, %{state | status: :downloading, requested: {piece_index, blocks_list}}}
   end
@@ -314,11 +315,11 @@ defmodule Peers.Worker do
       :keep_alive ->
         Logger.error("=== Connection alive ===")
         send_alive(socket)
-        Process.send_after(self(), :cycle, 0)
+        Process.send_after(self(), :cycle, 10)
         {:noreply, state}
 
       {:error, :timeout} ->
-        Process.send_after(self(), :cycle, 100)
+        Process.send_after(self(), :cycle, 10)
         {:noreply, state}
 
       {:error, :closed} ->

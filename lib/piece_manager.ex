@@ -43,14 +43,14 @@ defmodule Exorrent.PieceManager do
   def validate_piece(piece),
     do: GenServer.call(__MODULE__, {:validate_piece, piece})
 
-  def update_status(piece_index, status),
-    do: GenServer.call(__MODULE__, {:update_status, piece_index, status})
-
   def request_work(),
     do: GenServer.call(__MODULE__, :request_work)
 
   def request_work_bitmap(bitmap),
     do: GenServer.call(__MODULE__, {:request_work_bitmap, bitmap})
+
+  def remove_from_download(piece_index),
+    do: GenServer.cast(__MODULE__, {:remove_from_download, piece_index})
 
   # ----------------------
   #   GenServer functions
@@ -90,6 +90,16 @@ defmodule Exorrent.PieceManager do
 
     {:noreply, %{pieces_state | downloading: downloading}}
   end
+
+  def handle_cast({:remove_from_download, piece_index}, pieces_state) do
+    downloading =
+      pieces_state.downloading
+      |> Map.delete(piece_index)
+
+    {:noreply, %{pieces_state | downloading: downloading}}
+  end
+
+  # --------------------------------------------------
 
   def handle_call(:bitfield, _from, pieces_state),
     do: {:reply, pieces_state.bitmap, pieces_state}
@@ -154,18 +164,29 @@ defmodule Exorrent.PieceManager do
   end
 
   # -----------------------------------------------------------------------------------
+  # this function requests work from the missing pieces of the bitmap of the local node.
 
   def handle_call(:request_work, _from, pieces_state) do
     # find first missing piece
-    piece_index = get_missing_piece_index(pieces_state.bitmap, 0)
+    index =
+      0..(pieces_state.total_pieces - 1)
+      |> Enum.find(fn i ->
+        not has_piece?(pieces_state.bitmap, i) and not Map.has_key?(pieces_state.downloading, i)
+      end)
 
-    if piece_index < pieces_state.total_pieces,
-      do: {:reply, {:ok, piece_index}, pieces_state},
-      else: {:reply, {:none, nil}, pieces_state}
+    case index do
+      nil ->
+        {:reply, {:none, nil}, pieces_state}
+
+      i ->
+        downloading = Map.put(pieces_state.downloading, i, %{})
+        {:reply, {:ok, i}, %{pieces_state | downloading: downloading}}
+    end
   end
 
   # -----------------------------------------------------------------------------------
 
+  # this function requests work from the missing pieces of the bitmap of the connected peer.
   def handle_call({:request_work_bitmap, bitmap}, _from, pieces_state) do
     # get the first piece of the bitmap that is missing
     index =
@@ -176,14 +197,10 @@ defmodule Exorrent.PieceManager do
       nil ->
         {:reply, {:none, nil}, pieces_state}
 
-      val ->
-        {:reply, {:ok, val}, pieces_state}
+      i ->
+        downloading = Map.put(pieces_state.downloading, i, %{})
+        {:reply, {:ok, i}, %{pieces_state | downloading: downloading}}
     end
-  end
-
-  # maybe this functions is not needed anymore
-  def handle_call({:update_status, _piece_index, _status}, _from, pieces_state) do
-    {:reply, :ok, pieces_state}
   end
 
   # --------------------------------------------------
@@ -241,15 +258,6 @@ defmodule Exorrent.PieceManager do
   defp has_piece?(bitmap, index) do
     <<_::size(^index), bit::1, _::bitstring>> = bitmap
     bit === 1
-  end
-
-  defp get_missing_piece_index(<<>>, index),
-    do: index
-
-  defp get_missing_piece_index(<<bit::1, rest::bitstring>>, index) do
-    if bit == 0,
-      do: index,
-      else: get_missing_piece_index(rest, index + 1)
   end
 
   # --------------------------------------------------

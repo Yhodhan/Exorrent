@@ -1,6 +1,8 @@
 defmodule Exorrent.Listener do
   use GenServer
 
+  require Logger
+
   def start_link(opts),
     do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -18,8 +20,12 @@ defmodule Exorrent.Listener do
   end
 
   def handle_info(:accept, %{listen_socket: listen_socket} = state) do
+    Logger.info("=== Listening CONEXION === ")
+
     case :gen_tcp.accept(listen_socket, 5_000) do
       {:ok, socket} ->
+        Logger.debug("=== Connection accepted ===")
+
         {:ok, pid} =
           DynamicSupervisor.start_child(
             Exorrent.InboundPeerSupervisor,
@@ -31,6 +37,7 @@ defmodule Exorrent.Listener do
         {:noreply, state}
 
       {:error, :timeout} ->
+        Logger.warning("=== Connection rejected ===")
         send(self(), :accept)
         {:noreply, state}
     end

@@ -45,7 +45,6 @@ defmodule Webseed.Worker do
 
     case PieceManager.request_work() do
       {:ok, piece_index} ->
-        PieceManager.update_status(piece_index, :downloading)
         handle_piece(url, piece_index, state)
 
       {:none, _} ->
@@ -60,13 +59,10 @@ defmodule Webseed.Worker do
     with {:ok, data} <- fetch_piece(url, piece_index, length, size),
          {:ok, piece} <- PieceManager.validate_piece({piece_index, data}),
          :ok <- DiskManager.write_piece(piece_index, piece) do
-      PieceManager.update_status(piece_index, :done)
-
       {:noreply, state, {:continue, :cycle}}
     else
       {:error, {error, _}} ->
         Logger.error("=== Error fetching piece: #{error}")
-        PieceManager.update_status(piece_index, :miss)
         {:stop, :normal, state}
     end
   end
