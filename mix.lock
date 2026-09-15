@@ -1,4 +1,4 @@
 %{
   "bencoder": {:git, "https://github.com/Yhodhan/Bencoder.git", "abf07c86f685dff99ac4b82f87ea986220cfebdb", [branch: "master"]},
-  "exalia": {:git, "https://github.com/Yhodhan/Exalia.git", "88d8a1b702f28e51314cfd0f82b871c42286eead", [branch: "master"]},
+  "exalia": {:git, "https://github.com/Yhodhan/Exalia.git", "170aaa96dcdfd1b6c9ddaa750ae092d243c951d8", [branch: "master"]},
 }

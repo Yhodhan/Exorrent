@@ -23,17 +23,19 @@ defmodule Exorrent.TorrentManager do
     if t.urls != [], do: Exorrent.Webseed.handle_webseeds(t)
     if t.trackers != [], do: Exorrent.Tracker.handle_trackers(t)
 
-    {:ok, pid} = bootstrap_dht(t)
+    {:ok, pid, id} = bootstrap_dht(t)
 
     schedule_dht_announce()
     schedule_worker_discovery()
+    state = Map.put(state, :id, id)
+    state = Map.put(state, :pid, pid)
 
-    {:noreply, Map.put(state, :pid, pid)}
+    {:noreply, state}
   end
 
-  def handle_info(:workers_discovery, %{pid: pid, torrent: t} = state) do
+  def handle_info(:workers_discovery, %{pid: pid, torrent: t, id: id} = state) do
     Logger.info("=== Attemp to find new peers ===")
-    Exorrent.DHT.find_peers_and_connect(pid, t)
+    Exorrent.DHT.find_peers_and_connect(pid, id, t)
 
     schedule_worker_discovery()
 
@@ -58,11 +60,11 @@ defmodule Exorrent.TorrentManager do
     Task.Supervisor.start_child(Exorrent.TaskSupervisor, fn ->
       Exorrent.DHT.bootstrap(pid, id)
 
-      Exorrent.DHT.find_peers_and_connect(pid, t)
+      Exorrent.DHT.find_peers_and_connect(pid, id, t)
       Exorrent.DHT.announce(pid, t)
     end)
 
-    {:ok, pid}
+    {:ok, pid, id}
   end
 
   def schedule_dht_announce(),

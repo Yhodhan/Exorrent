@@ -52,7 +52,7 @@ defmodule Peers.Worker do
     interes = Messages.interested()
     :gen_tcp.send(socket, interes)
 
-    Process.send_after(self(), :cycle, 1)
+    send(self(), :cycle)
 
     {:noreply, %{state | interested: true}}
   end
@@ -60,7 +60,7 @@ defmodule Peers.Worker do
   # --------------------------------------------------
 
   def handle_info(:cycle, %{status: :idle, interested: true, has_bitfield?: true} = state) do
-    Process.send_after(self(), :cycle, 2)
+    send(self(), :cycle)
 
     with {:ok, piece} <- PieceManager.request_work_bitmap(state.bitmap) do
       {:ok, state} = prepare_request(piece, state)
@@ -113,7 +113,7 @@ defmodule Peers.Worker do
             PieceManager.remove_from_download(piece_index)
             # Keep cycle
             # Fetch next bitfield index
-            Process.send_after(self(), :cycle, 10)
+            send(self(), :cycle)
             {:noreply, %{state | status: :idle}}
 
           _error ->
@@ -128,7 +128,7 @@ defmodule Peers.Worker do
 
   def handle_info(msg, state) do
     Logger.warning("=== Unhandled message in #{inspect(self())}: #{inspect(msg)} ===")
-    Process.sleep(2000)
+    send(self(), :cycle)
     {:noreply, state}
   end
 
@@ -151,14 +151,14 @@ defmodule Peers.Worker do
 
       case process_message(id, len, state) do
         {:block_obtained, state} ->
-          Process.send_after(self(), :cycle, 10)
+          send(self(), :cycle)
           {:noreply, state}
 
         {:downloading, state} ->
           {:noreply, state, {:continue, :downloading}}
 
         {:ok, state} ->
-          Process.send_after(self(), :cycle, 10)
+          send(self(), :cycle)
           {:noreply, state}
       end
     else
@@ -315,11 +315,11 @@ defmodule Peers.Worker do
       :keep_alive ->
         Logger.error("=== Connection alive ===")
         send_alive(socket)
-        Process.send_after(self(), :cycle, 10)
+        send(self(), :cycle)
         {:noreply, state}
 
       {:error, :timeout} ->
-        Process.send_after(self(), :cycle, 10)
+        send(self(), :cycle)
         {:noreply, state}
 
       _ ->

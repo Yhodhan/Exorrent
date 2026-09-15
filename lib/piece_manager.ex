@@ -52,6 +52,9 @@ defmodule Exorrent.PieceManager do
   def remove_from_download(piece_index),
     do: GenServer.cast(__MODULE__, {:remove_from_download, piece_index})
 
+  def progress(),
+    do: GenServer.call(__MODULE__, :progress)
+
   # ----------------------
   #   GenServer functions
   # ----------------------
@@ -203,6 +206,20 @@ defmodule Exorrent.PieceManager do
     end
   end
 
+  def handle_call(:progress, _from, pieces_state) do
+    have = count_bits(pieces_state.bitmap, pieces_state.total_pieces)
+
+    progress = %{
+      total_pieces: pieces_state.total_pieces,
+      have: have,
+      missing: pieces_state.total_pieces - have,
+      downloading: map_size(pieces_state.downloading),
+      percent: Float.round(have / pieces_state.total_pieces * 100, 2)
+    }
+
+    {:reply, progress, pieces_state}
+  end
+
   # --------------------------------------------------
   #                 Private functions
   # --------------------------------------------------
@@ -298,5 +315,18 @@ defmodule Exorrent.PieceManager do
     if MapSet.member?(hashes, hash),
       do: {:ok, piece},
       else: {:error, piece}
+  end
+
+  defp count_bits(bitmap, total_pieces) do
+    for <<bit::1 <- bitmap>>, reduce: {0, 0} do
+      {count, index} ->
+        cond do
+          # ignore byte padding
+          index >= total_pieces -> {count, index + 1}
+          bit == 1 -> {count + 1, index + 1}
+          true -> {count, index + 1}
+        end
+    end
+    |> elem(0)
   end
 end
