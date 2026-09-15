@@ -322,10 +322,16 @@ defmodule Peers.Worker do
         Process.send_after(self(), :cycle, 10)
         {:noreply, state}
 
-      {:error, :closed} ->
+      _ ->
         Logger.error("=== Coneccion closed in worker: #{inspect(self())} ===")
+
+        case Map.get(state, :requested) do
+          {index, _} -> PieceManager.remove_from_download(index)
+          nil -> nil
+        end
+
         :gen_tcp.close(socket)
-        {:stop, :closed, state}
+        {:stop, :normal, state}
     end
   end
 
