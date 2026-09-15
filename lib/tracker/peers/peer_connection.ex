@@ -17,6 +17,7 @@ defmodule Peers.PeerConnection do
     case :gen_tcp.connect(ip, port, [:binary, packet: :raw, active: false], 2000) do
       {:ok, socket} ->
         Logger.info("=== Succesfull connection #{inspect(ip)}:#{port} ===")
+
         {:ok, socket}
 
       {:error, reason} ->

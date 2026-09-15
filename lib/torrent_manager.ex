@@ -4,7 +4,7 @@ defmodule Exorrent.TorrentManager do
   require Logger
 
   @announce_interval :timer.minutes(5)
-  @workers_discovery :timer.minutes(5)
+  @workers_discovery :timer.minutes(3)
 
   def start_link(torrent \\ %{}),
     do: GenServer.start_link(__MODULE__, torrent)
@@ -32,6 +32,7 @@ defmodule Exorrent.TorrentManager do
   end
 
   def handle_info(:workers_discovery, %{pid: pid, torrent: t} = state) do
+    Logger.info("=== Attemp to find new peers ===")
     Exorrent.DHT.find_peers_and_connect(pid, t)
 
     schedule_worker_discovery()

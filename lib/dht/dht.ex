@@ -20,7 +20,7 @@ defmodule Exorrent.DHT do
     Logger.info("=== DHT lookup peers ===")
     peers = Exalia.get_peers(pid, torrent.info_hash)
 
-    Logger.info("=== Peers Obtainied ===")
+    Logger.info("=== Peers Obtained ===")
 
     Tracker.init_workers(torrent, peers)
   end
@@ -28,6 +28,11 @@ defmodule Exorrent.DHT do
   def announce(pid, torrent) do
     port = Application.get_env(:exorrent, :torrent_port)
     Exalia.announce_peer(pid, torrent.info_hash, port)
+  end
+
+  def store_peer({ip, port}, infohash) do
+    peer = Exalia.Candidate.new(nil, ip, port)
+    Exalia.Storage.store_node(infohash, peer)
   end
 
   # ------------------------

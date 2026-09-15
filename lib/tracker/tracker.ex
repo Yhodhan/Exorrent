@@ -34,6 +34,7 @@ defmodule Exorrent.Tracker do
       # ------------------
       #    Init downlaod
       # ------------------
+      Exorrent.DHT.store_peer(peer, torrent.infohash)
       Worker.init_cycle(worker_pid)
     else
       error ->
